@@ -25,12 +25,17 @@ def cond(y):
     w_prime = -(w) / tau_e
     u_prime = -(u) / tau_i
 
-    return [v + 0.1*v_prime, w + 0.1*w_prime, u + 0.1*u_prime]
+    nv = v + 0.1*v_prime
+
+    if nv > threshold:
+        nv = reset
+
+    return [nv, w + 0.1*w_prime, u + 0.1*u_prime]
 
 v_res = 100
 w_res = 100
 u_res = 100
-I_res = 300
+I_res = 100
 
 v_max = -40.0
 v_min = -80.0
