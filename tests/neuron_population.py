@@ -4,6 +4,7 @@ from scipy.stats import norm
 from scipy.stats import poisson
 
 from popdynamics.popsolver import Solver
+from popdynamics.fastpopsolver import FastSolver
 
 def cond(y):
     E_l = -70.6
@@ -138,6 +139,8 @@ for i in range(I_res):
 # Initialise the monte carlo neurons
 mc_neurons = np.array([[norm.rvs(-70.6, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0]] for a in range(5000)])
 
+
+# CPU solver
 dims = 3
 cell_widths = [(v_max-v_min)/v_res, (w_max-w_min)/w_res, (u_max-u_min)/u_res]
 
@@ -151,11 +154,21 @@ solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 
 solver.addNoiseKernel(pymiind_wI, 1)
 solver.addNoiseKernel(pymiind_uI, 2)
 
+# GPU solver
+
+gpu_solver = FastSolver(cond, initial_dist, [v_min, w_min, u_min], [v_max-v_min, w_max-w_min, u_max-u_min], [v_res, w_res, u_res])
+gpu_solver.addNoiseKernel(wI_min, wI_max-wI_min, I_res, pymiind_wI, 1)
+#gpu_solver.addNoiseKernel(u_min, u_max-u_min, u_res, pymiind_uI, 2)
+
 for iteration in range(1000):
 
-    # Solver
+    # CPU Solver
     solver.updateDeterministic()
     solver.applyNoiseKernels()
+
+    # GPU Solver
+    gpu_solver.updateDeterministic()
+    gpu_solver.applyNoiseKernels()
 
     # Also run the monte carlo simulation 
     fired_count = 0
@@ -171,11 +184,13 @@ for iteration in range(1000):
         
 
     if (iteration % 50 == 0) :
+        # Plot Monte Carlo
         fig, ax = plt.subplots(2,2)
         ax[0,0].hist(mc_neurons[:,0], density=True, bins=v_res, range=[v_min,v_max], histtype='step')
         ax[0,1].hist(mc_neurons[:,1], density=True, bins=w_res, range=[w_min,w_max], histtype='step')
         ax[1,0].hist(mc_neurons[:,2], density=True, bins=u_res, range=[u_min,u_max], histtype='step')
         
+        # Plot CPU Solver marginals
         mpos, marginals = solver.calcMarginals()
 
         marginals[0] = [a / (cell_widths[0]) for a in marginals[0]]
@@ -185,6 +200,18 @@ for iteration in range(1000):
         ax[0,0].scatter(mpos[0], marginals[0])
         ax[0,1].scatter(mpos[1], marginals[1])
         ax[1,0].scatter(mpos[2], marginals[2])
+
+        # Plot GPU Solver marginals
+
+        mpos, marginals = gpu_solver.calcMarginals()
+
+        marginals[0] = [a / (cell_widths[0]) for a in marginals[0]]
+        marginals[1] = [a / (cell_widths[1]) for a in marginals[1]]
+        marginals[2] = [a / (cell_widths[2]) for a in marginals[2]]
+
+        ax[0,0].plot(mpos[0], marginals[0])
+        ax[0,1].plot(mpos[1], marginals[1])
+        ax[1,0].plot(mpos[2], marginals[2])
 
         fig.tight_layout()
         plt.show()

@@ -1,13 +1,4 @@
-from distutils.ccompiler import show_compilers
-from pycausaljazz import pycausaljazz as cj
 import numpy as np
-import numpy.random as random
-import matplotlib.pyplot as plt
-import time
-from scipy.stats import norm
-from scipy.stats import poisson
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.cm as cm
 import cupy as cp
 
 class NdGrid:
@@ -155,10 +146,12 @@ class GpuWrapper:
 class FastSolver:
     def __init__(self, _func, initial_distribution, _base, _size, _res):
         self.grids = [NdGrid(_base, _size, _res, initial_distribution),NdGrid(_base, _size, _res, initial_distribution)]
+        self.current_grid = 0
         self.noise_kernels = []
         self.func = _func
 
-        self.transition_data = self.generateConditionalTransitionCSR(self.grids[0], _func, self.grids[1])
+        transition_data = self.generateConditionalTransitionCSR(self.grids[0], _func, self.grids[1])
+        self.transition_data = [cp.asarray(transition_data[0]),cp.asarray(transition_data[1],dtype=cp.float32), cp.asarray(transition_data[2]), cp.asarray(transition_data[3])]
 
         self.gpu_worker = GpuWrapper()
 
@@ -195,83 +188,28 @@ class FastSolver:
 
         return out_transitions_cells, out_transitions_props, out_transitions_counts, out_transitions_offsets 
 
-    def addNoiseKernel(self, kernel, dimension):
-        kernel_transitions = {}
-        cs = tuple(np.zeros(self.dims).tolist())
-        kernel_transitions[cs] = []
-        for c in range(len(kernel)):
-            if kernel[c] > 0.0:
-                kernel_transitions[cs] = kernel_transitions[cs] + [(kernel[c], [c-int(len(kernel)/2) if d == dimension else 0 for d in range(self.dims)])]
-        self.noise_kernels = self.noise_kernels + [[1.0,kernel_transitions[cs]]]
+    # Currently, just allow 1D arrays for noise and pair it with a dimension. 
+    # Later we should allow the definition of ND kernels.
+    def addNoiseKernel(self, _base, _size, _res, kernel_data, dimension):
+        self.noise_kernels = self.noise_kernels + [(self.grids[self.current_grid].res_offsets[dimension], NdGrid([_base], [_size], [_res], kernel_data))]
 
+    # Do CPU marginal calculation for now. Slow because we need to move the full distribution off card
     def calcMarginals(self):
-        vs = [{} for d in range(self.dims)]
-        for c in self.cell_buffers[self.current_buffer]:
-            for d in range(self.dims):
-                if c[d] not in vs[d]:
-                    vs[d][c[d]] = self.cell_buffers[self.current_buffer][c][0]
-                else:
-                    vs[d][c[d]] += self.cell_buffers[self.current_buffer][c][0]
-
-        final_vs = [[] for d in range(self.dims)]
-        final_vals = [[] for d in range(self.dims)]
-
-        for d in range(self.dims):
-            for v in vs[d]:
-                final_vs[d] = final_vs[d] + [self.cell_base[d] + (self.cell_widths[d]*(v))]
-                final_vals[d] = final_vals[d] + [vs[d][v]]
+        final_vals = []
+        final_vs = []
+        for d in range(self.grids[self.current_grid].numDimensions()):
+            other_dims = tuple([i for i in range(self.grids[self.current_grid].numDimensions()) if i != d])
+            final_vals = final_vals + [cp.asnumpy(cp.sum(self.grids[self.current_grid].data, other_dims))]
+            final_vs = final_vs + [np.linspace(self.grids[self.current_grid].base[d],self.grids[self.current_grid].base[d] + self.grids[self.current_grid].size[d],self.grids[self.current_grid].res[d])]
 
         return final_vs, final_vals
 
     def updateDeterministic(self):
-        # Set the next buffer mass values to 0
-        for a in self.cell_buffers[(self.current_buffer+1)%2].keys():
-            self.cell_buffers[(self.current_buffer+1)%2][a][0] = 0.0
-    
-        # Fill the next buffer with the updated mass
-        for coord in self.cell_buffers[self.current_buffer]:
-            self.cell_buffers[self.current_buffer][coord][0] /= self.remove_sum
-            for ts in self.cell_buffers[self.current_buffer][coord][1]:
-                self.updateCell(False, self.cell_buffers[(self.current_buffer+1)%2], ts, coord, self.cell_buffers[self.current_buffer][coord][0], self.func)
-
-        # Remove any cells with a small amount of mass and keep a total to spread back to the remaining population
-        remove = []
-        self.remove_sum = 1.0
-        for a in self.cell_buffers[(self.current_buffer+1)%2].keys():
-            if self.cell_buffers[(self.current_buffer+1)%2][a][0] < self.mass_epsilon:
-                remove = remove + [a]
-                self.remove_sum -= self.cell_buffers[(self.current_buffer+1)%2][a][0]
-
-        for a in remove:
-            self.cell_buffers[(self.current_buffer+1)%2].pop(a, None)
-
-        # swap the buffer counter
-        self.current_buffer = (self.current_buffer+1)%2
+        self.gpu_worker.cuda_function_applyJointTransition((self.grids[self.current_grid].total_cells,),(128,), (self.grids[self.current_grid].total_cells,self.grids[(self.current_grid+1)%2].data, self.transition_data[0], self.transition_data[1], self.transition_data[2], self.transition_data[3], self.grids[self.current_grid].data))
+        self.current_grid = (self.current_grid+1)%2
 
     def applyNoiseKernels(self):
         for kernel in self.noise_kernels:
-            for a in self.cell_buffers[(self.current_buffer+1)%2].keys():
-                self.cell_buffers[(self.current_buffer+1)%2][a][0] = 0.0
-    
-            for coord in self.cell_buffers[self.current_buffer]:
-                self.cell_buffers[self.current_buffer][coord][0] /= self.remove_sum
-                for ts in kernel[1]:
-                    self.updateCell(True, self.cell_buffers[(self.current_buffer+1)%2], ts, coord, self.cell_buffers[self.current_buffer][coord][0], self.func)
+            self.gpu_worker.cuda_function_convolveKernel((self.grids[self.current_grid].total_cells,),(128,), (self.grids[self.current_grid].total_cells, self.grids[(self.current_grid+1)%2].data,self.grids[self.current_grid].data, kernel[1].data, kernel[1].res[0], kernel[0]))
+            self.current_grid = (self.current_grid+1)%2
 
-            remove = []
-            self.remove_sum = 1.0
-            for a in self.cell_buffers[(self.current_buffer+1)%2].keys():
-                if self.cell_buffers[(self.current_buffer+1)%2][a][0] < self.mass_epsilon:
-                    remove = remove + [a]
-                    self.remove_sum -= self.cell_buffers[(self.current_buffer+1)%2][a][0]
-
-            for a in remove:
-                self.cell_buffers[(self.current_buffer+1)%2].pop(a, None)
-
-            self.current_buffer = (self.current_buffer+1)%2
-
-cuda_function_applyJointTransition((v_res*w_res*u_res,),(128,),(v_res*w_res*u_res, pymiind_grid_2.data, cond_cells, cond_props, cond_counts, cond_offsets, pymiind_grid_1.data))
-cuda_function_convolveKernel((v_res*w_res*u_res,),(128,), (v_res*w_res*u_res, pymiind_grid_1.data, pymiind_grid_2.data, excitatory_kernel.data, I_res, v_res))
-cuda_function_convolveKernel((v_res*w_res*u_res,),(128,), (v_res*w_res*u_res, pymiind_grid_2.data, pymiind_grid_1.data, inhibitory_kernel.data, I_res, v_res*w_res))
-cp.copyto(pymiind_grid_1.data, pymiind_grid_2.data)
-    
