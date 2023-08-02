@@ -11,6 +11,7 @@ class NdGrid:
 
         temp_res_offsets = [1]
         self.res_offsets = self.calcResOffsets(1, temp_res_offsets, self.res)
+        self.res_offsets.reverse()
         
         self.cell_widths = [self.size[a] / self.res[a] for a in range(self.numDimensions())]
         
@@ -46,11 +47,9 @@ class NdGrid:
     def getCellCoords(self, cell_num):
         coords = [0 for a in range(self.numDimensions())]
 
-        i = self.numDimensions()-1
-        while i >= 0:
+        for i in range(self.numDimensions()):
             coords[i] = int(cell_num / self.res_offsets[i])
             cell_num = cell_num - (coords[i] * self.res_offsets[i])
-            i -= 1
 
         return coords
 
@@ -86,6 +85,23 @@ class NdGrid:
                 weights[d] = 1.0
 
         return coords, weights
+
+    def calcTransitions(self, centroid, stepped_centroid, coord, d=0, target_coord=[], mass=1.0):
+        if len(target_coord) == len(coord):
+            return [(mass, target_coord)]
+
+        diff = stepped_centroid[d] - centroid[d]
+        cell_lo = coord[d] + int(diff / self.cell_widths[d])
+        cell_hi = cell_lo + 1
+        prop_lo = 0.0
+        if diff < 0.0: # actually, diff is negative so cell_lo is the upper cell
+            cell_hi = cell_lo - 1
+            prop_lo = ((diff % self.cell_widths[d]) / self.cell_widths[d])
+        else:
+            prop_lo = 1.0 - ((diff % self.cell_widths[d]) / self.cell_widths[d])
+        prop_hi = 1.0 - prop_lo
+    
+        return self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_lo], mass*prop_lo) + self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_hi], mass*prop_hi)
 
 class GpuWrapper:
     def __init__(self):
@@ -155,7 +171,6 @@ class FastSolver:
 
         self.gpu_worker = GpuWrapper()
 
-        
     def generateConditionalTransitionCSR(self, grid_in, func, grid_out):
         transitions = [[] for a in range(grid_out.total_cells)]
     
@@ -163,9 +178,10 @@ class FastSolver:
         num_transitions = 0
         for r in range(grid_in.total_cells):
             start_point = grid_in.getCellCentroid(r)
-            coords,weights = grid_out.getContainingCellWeightedCoords(func(start_point))
-            transitions[grid_out.getCellNum(coords)] = transitions[grid_out.getCellNum(coords)] + [(r,1.0)]
-            num_transitions += 1
+            ts = grid_in.calcTransitions(start_point, func(start_point), grid_in.getCellCoords(r))
+            for t in ts:
+                transitions[grid_out.getCellNum(t[1])] = transitions[grid_out.getCellNum(t[1])] + [(r,t[0])]
+                num_transitions += 1
 
         out_transitions_cells = [a for a in range(num_transitions)]
         out_transitions_props = [a for a in range(num_transitions)]

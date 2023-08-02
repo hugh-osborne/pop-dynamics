@@ -3,15 +3,22 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 from scipy.stats import poisson
 
+import time
+
 from popdynamics.popsolver import Solver
 from popdynamics.fastpopsolver import FastSolver
+
+use_monte_carlo = False
+use_cpu_solver = False
+use_gpu_solver = True
+plot_output = False
 
 def cond(y):
     E_l = -70.6
     E_e = 0.0
     E_i = -75
     C = 281
-    g_l = 0.03
+    g_l = 3.0
     tau_e =2.728
     tau_i = 10.49
 
@@ -26,7 +33,7 @@ def cond(y):
     w_prime = -(w) / tau_e
     u_prime = -(u) / tau_i
 
-    nv = v + 0.1*v_prime
+    nv = v + v_prime
 
     if nv > threshold:
         nv = reset
@@ -137,7 +144,8 @@ for i in range(I_res):
         val_counter += uIpdf[i]
 
 # Initialise the monte carlo neurons
-mc_neurons = np.array([[norm.rvs(-70.6, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0]] for a in range(5000)])
+if use_monte_carlo:
+    mc_neurons = np.array([[norm.rvs(-70.6, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0]] for a in range(5000)])
 
 
 # CPU solver
@@ -150,68 +158,86 @@ for cv in range(v_res):
         for cu in range(u_res):
             initial_dist[cv,cw,cu] = vpdf[cv]*wpdf[cw]*updf[cu]
 
-solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001)
-solver.addNoiseKernel(pymiind_wI, 1)
-solver.addNoiseKernel(pymiind_uI, 2)
+
+if use_cpu_solver:
+    perf_time = time.perf_counter()
+    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001)
+    solver.addNoiseKernel(pymiind_wI, 1)
+    solver.addNoiseKernel(pymiind_uI, 2)
+    print("CPU Setup time:", time.perf_counter() - perf_time)
+
 
 # GPU solver
 
-gpu_solver = FastSolver(cond, initial_dist, [v_min, w_min, u_min], [v_max-v_min, w_max-w_min, u_max-u_min], [v_res, w_res, u_res])
-gpu_solver.addNoiseKernel(wI_min, wI_max-wI_min, I_res, pymiind_wI, 1)
-#gpu_solver.addNoiseKernel(u_min, u_max-u_min, u_res, pymiind_uI, 2)
+if use_gpu_solver:
+    perf_time = time.perf_counter()
+    gpu_solver = FastSolver(cond, initial_dist, [v_min, w_min, u_min], [v_max-v_min, w_max-w_min, u_max-u_min], [v_res, w_res, u_res])
+    gpu_solver.addNoiseKernel(wI_min, wI_max-wI_min, wI_res, pymiind_wI, 1)
+    gpu_solver.addNoiseKernel(uI_min, uI_max-uI_min, uI_res, pymiind_uI, 2)
+    print("GPU Setup time:", time.perf_counter() - perf_time)
 
-for iteration in range(1000):
+perf_time = time.perf_counter()
+for iteration in range(101):
 
     # CPU Solver
-    solver.updateDeterministic()
-    solver.applyNoiseKernels()
+    if use_cpu_solver:
+        solver.updateDeterministic()
+        solver.applyNoiseKernels()
 
     # GPU Solver
-    gpu_solver.updateDeterministic()
-    gpu_solver.applyNoiseKernels()
+    if use_gpu_solver:
+        gpu_solver.updateDeterministic()
+        gpu_solver.applyNoiseKernels()
 
     # Also run the monte carlo simulation 
-    fired_count = 0
-    for nn in range(len(mc_neurons)):
-        mc_neurons[nn] = cond(mc_neurons[nn])
 
-        if (mc_neurons[nn][0] > -50.0):
-            mc_neurons[nn][0] = -70.6
-            fired_count+=1
-                
-        mc_neurons[nn][1] += epsp*poisson.rvs(w_rate*0.1) # override w
-        mc_neurons[nn][2] += ipsp*poisson.rvs(u_rate*0.1) # override u
+    if use_monte_carlo:
+        fired_count = 0
+
+        for nn in range(len(mc_neurons)):
+            mc_neurons[nn] = cond(mc_neurons[nn])
         
+            if (mc_neurons[nn][0] > -50.0):
+                mc_neurons[nn][0] = -70.6
+                fired_count+=1
+                
+            mc_neurons[nn][1] += epsp*poisson.rvs(w_rate*0.1) # override w
+            mc_neurons[nn][2] += ipsp*poisson.rvs(u_rate*0.1) # override u  
 
-    if (iteration % 50 == 0) :
+    if plot_output and (iteration % 10 == 0) :
         # Plot Monte Carlo
         fig, ax = plt.subplots(2,2)
-        ax[0,0].hist(mc_neurons[:,0], density=True, bins=v_res, range=[v_min,v_max], histtype='step')
-        ax[0,1].hist(mc_neurons[:,1], density=True, bins=w_res, range=[w_min,w_max], histtype='step')
-        ax[1,0].hist(mc_neurons[:,2], density=True, bins=u_res, range=[u_min,u_max], histtype='step')
+
+        if use_monte_carlo:
+            ax[0,0].hist(mc_neurons[:,0], density=True, bins=v_res, range=[v_min,v_max], histtype='step')
+            ax[0,1].hist(mc_neurons[:,1], density=True, bins=w_res, range=[w_min,w_max], histtype='step')
+            ax[1,0].hist(mc_neurons[:,2], density=True, bins=u_res, range=[u_min,u_max], histtype='step')
         
         # Plot CPU Solver marginals
-        mpos, marginals = solver.calcMarginals()
+        if use_cpu_solver:
+            mpos, marginals = solver.calcMarginals()
 
-        marginals[0] = [a / (cell_widths[0]) for a in marginals[0]]
-        marginals[1] = [a / (cell_widths[1]) for a in marginals[1]]
-        marginals[2] = [a / (cell_widths[2]) for a in marginals[2]]
+            marginals[0] = [a / (cell_widths[0]) for a in marginals[0]]
+            marginals[1] = [a / (cell_widths[1]) for a in marginals[1]]
+            marginals[2] = [a / (cell_widths[2]) for a in marginals[2]]
 
-        ax[0,0].scatter(mpos[0], marginals[0])
-        ax[0,1].scatter(mpos[1], marginals[1])
-        ax[1,0].scatter(mpos[2], marginals[2])
+            ax[0,0].scatter(mpos[0], marginals[0])
+            ax[0,1].scatter(mpos[1], marginals[1])
+            ax[1,0].scatter(mpos[2], marginals[2])
 
         # Plot GPU Solver marginals
+        if use_gpu_solver:
+            mpos, marginals = gpu_solver.calcMarginals()
 
-        mpos, marginals = gpu_solver.calcMarginals()
+            marginals[0] = [a / (cell_widths[0]) for a in marginals[0]]
+            marginals[1] = [a / (cell_widths[1]) for a in marginals[1]]
+            marginals[2] = [a / (cell_widths[2]) for a in marginals[2]]
 
-        marginals[0] = [a / (cell_widths[0]) for a in marginals[0]]
-        marginals[1] = [a / (cell_widths[1]) for a in marginals[1]]
-        marginals[2] = [a / (cell_widths[2]) for a in marginals[2]]
-
-        ax[0,0].plot(mpos[0], marginals[0])
-        ax[0,1].plot(mpos[1], marginals[1])
-        ax[1,0].plot(mpos[2], marginals[2])
+            ax[0,0].plot(mpos[0], marginals[0])
+            ax[0,1].plot(mpos[1], marginals[1])
+            ax[1,0].plot(mpos[2], marginals[2])
 
         fig.tight_layout()
         plt.show()
+
+print("Total simulation time:", time.perf_counter() - perf_time)
