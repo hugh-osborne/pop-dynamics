@@ -8,8 +8,8 @@ import time
 from popdynamics.popsolver import Solver
 from popdynamics.fastpopsolver import FastSolver
 
-use_monte_carlo = False
-use_cpu_solver = False
+use_monte_carlo = True
+use_cpu_solver = True
 use_gpu_solver = True
 plot_output = True
 
