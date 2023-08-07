@@ -7,7 +7,7 @@ class NdGrid:
         self.size = _size
         self.res = _res
         if _data is not None:
-            self.data = cp.asarray(_data,dtype=cp.float32)
+            self.data = cp.asarray(_data,dtype=cp.float32,order='A')
 
         temp_res_offsets = [1]
         self.res_offsets = self.calcResOffsets(1, temp_res_offsets, self.res)
@@ -20,10 +20,10 @@ class NdGrid:
             self.total_cells *= r
 
     def readData(self):
-        return cp.asnumpy(self.data)
+        return cp.asnumpy(self.data,order='A')
 
     def updateData(self, _data):
-        self.data = cp.asarray(_data,dtype=cp.float32)
+        self.data = cp.asarray(_data,dtype=cp.float32,order='A')
 
     def calcResOffsets(self, count, offsets, res):
         if len(res) == 1:
@@ -167,7 +167,7 @@ class FastSolver:
         self.func = _func
 
         transition_data = self.generateConditionalTransitionCSR(self.grids[0], _func, self.grids[1])
-        self.transition_data = [cp.asarray(transition_data[0]),cp.asarray(transition_data[1],dtype=cp.float32), cp.asarray(transition_data[2]), cp.asarray(transition_data[3])]
+        self.transition_data = [cp.asarray(transition_data[0],order='A'),cp.asarray(transition_data[1],dtype=cp.float32,order='A'), cp.asarray(transition_data[2],order='A'), cp.asarray(transition_data[3],order='A')]
 
         self.gpu_worker = GpuWrapper()
 
@@ -215,7 +215,7 @@ class FastSolver:
         final_vs = []
         for d in range(self.grids[self.current_grid].numDimensions()):
             other_dims = tuple([i for i in range(self.grids[self.current_grid].numDimensions()) if i != d])
-            final_vals = final_vals + [cp.asnumpy(cp.sum(self.grids[self.current_grid].data, other_dims))]
+            final_vals = final_vals + [cp.asnumpy(cp.sum(self.grids[self.current_grid].data, other_dims),order='A')]
             final_vs = final_vs + [np.linspace(self.grids[self.current_grid].base[d],self.grids[self.current_grid].base[d] + self.grids[self.current_grid].size[d],self.grids[self.current_grid].res[d])]
 
         return final_vs, final_vals
