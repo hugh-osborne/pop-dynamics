@@ -150,7 +150,6 @@ class GpuWrapper:
             for (int i = index; i < num_out_grid_cells; i += stride) {
                 out_grid[i] = 0.0;
                 for (int t = transitions_offsets[i]; t < transitions_offsets[i] + transitions_counts[i]; t++) {
-                    printf("%i %i %f\n", i, transition_cells[t], transition_props[t]);
                     out_grid[i] += in_grid[transition_cells[t]] * transition_props[t];
                 }
             }
@@ -184,11 +183,13 @@ class FastSolver:
         for r in range(grid_in.total_cells):
             start_point = grid_in.getCellCentroid(r)
             ts = grid_in.calcTransitions(start_point, func(start_point), grid_in.getCellCoords(r))
-            if r == 220909:
-                for t in ts:
-                    print(r, t, t[0], self.grids[self.current_grid].getCellNum(t[1]))
             for t in ts:
-                transitions[grid_out.getCellNum(t[1])] = transitions[grid_out.getCellNum(t[1])] + [(r,t[0])]
+                out_cell = grid_out.getCellNum(t[1])
+                if out_cell < 0:
+                    out_cell = 0
+                if out_cell >= grid_out.total_cells:
+                    out_cell = grid_out.total_cells - 1
+                transitions[out_cell] = transitions[out_cell] + [(r,t[0])]
                 num_transitions += 1
 
         out_transitions_cells = [a for a in range(num_transitions)]
