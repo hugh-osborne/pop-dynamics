@@ -150,8 +150,7 @@ class GpuWrapper:
             for (int i = index; i < num_out_grid_cells; i += stride) {
                 out_grid[i] = 0.0;
                 for (int t = transitions_offsets[i]; t < transitions_offsets[i] + transitions_counts[i]; t++) {
-                    if (i == 220909)
-                        printf("%i %i %f\n", i, transition_cells[t], transition_props[t]);
+                    printf("%i %i %f\n", i, transition_cells[t], transition_props[t]);
                     out_grid[i] += in_grid[transition_cells[t]] * transition_props[t];
                 }
             }
