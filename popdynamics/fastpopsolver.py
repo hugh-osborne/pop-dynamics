@@ -7,7 +7,8 @@ class NdGrid:
         self.size = _size
         self.res = _res
         if _data is not None:
-            self.data = cp.asarray(_data,dtype=cp.float32,order='A')
+            self.data = cp.asarray(_data,dtype=cp.float32)
+            self.data = cp.reshape(self.data, self.data.shape, order='C')
 
         temp_res_offsets = [1]
         self.res_offsets = self.calcResOffsets(1, temp_res_offsets, self.res)
@@ -20,10 +21,11 @@ class NdGrid:
             self.total_cells *= r
 
     def readData(self):
-        return cp.asnumpy(self.data,order='A')
+        return cp.asnumpy(self.data)
 
     def updateData(self, _data):
-        self.data = cp.asarray(_data,dtype=cp.float32,order='A')
+        self.data = cp.asarray(_data,dtype=cp.float32)
+        self.data = cp.reshape(self.data, self.data.shape, order='C')
 
     def calcResOffsets(self, count, offsets, res):
         if len(res) == 1:
@@ -167,7 +169,9 @@ class FastSolver:
         self.func = _func
 
         transition_data = self.generateConditionalTransitionCSR(self.grids[0], _func, self.grids[1])
-        self.transition_data = [cp.asarray(transition_data[0],order='A'),cp.asarray(transition_data[1],dtype=cp.float32,order='A'), cp.asarray(transition_data[2],order='A'), cp.asarray(transition_data[3],order='A')]
+        self.transition_data = [cp.asarray(transition_data[0]),cp.asarray(transition_data[1],dtype=cp.float32), cp.asarray(transition_data[2]), cp.asarray(transition_data[3])]
+        for a in self.transition_data:
+            a = cp.reshape(a, a.shape, order='C')
 
         self.gpu_worker = GpuWrapper()
 
