@@ -184,7 +184,8 @@ class FastSolver:
             start_point = grid_in.getCellCentroid(r)
             ts = grid_in.calcTransitions(start_point, func(start_point), grid_in.getCellCoords(r))
             if r == 220909:
-                print(ts)
+                for t in ts:
+                    print(t, t[0], self.grids[self.current_grid].getCellNum(t[1]))
             for t in ts:
                 transitions[grid_out.getCellNum(t[1])] = transitions[grid_out.getCellNum(t[1])] + [(r,t[0])]
                 num_transitions += 1
