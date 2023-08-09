@@ -8,7 +8,7 @@ class NdGrid:
         self.res = _res
         if _data is not None:
             self.data = cp.asarray(_data,dtype=cp.float32)
-            self.data = cp.reshape(self.data, self.data.shape, order='C')
+            self.data = cp.reshape(self.data, self.data.shape, order='F')
 
         temp_res_offsets = [1]
         self.res_offsets = self.calcResOffsets(1, temp_res_offsets, self.res)
@@ -25,7 +25,7 @@ class NdGrid:
 
     def updateData(self, _data):
         self.data = cp.asarray(_data,dtype=cp.float32)
-        self.data = cp.reshape(self.data, self.data.shape, order='C')
+        self.data = cp.reshape(self.data, self.data.shape, order='F')
 
     def calcResOffsets(self, count, offsets, res):
         if len(res) == 1:
@@ -171,7 +171,7 @@ class FastSolver:
         transition_data = self.generateConditionalTransitionCSR(self.grids[0], _func, self.grids[1])
         self.transition_data = [cp.asarray(transition_data[0]),cp.asarray(transition_data[1],dtype=cp.float32), cp.asarray(transition_data[2]), cp.asarray(transition_data[3])]
         for a in self.transition_data:
-            a = cp.reshape(a, a.shape, order='C')
+            a = cp.reshape(a, a.shape, order='F')
 
         self.gpu_worker = GpuWrapper()
 
@@ -219,7 +219,7 @@ class FastSolver:
         final_vs = []
         for d in range(self.grids[self.current_grid].numDimensions()):
             other_dims = tuple([i for i in range(self.grids[self.current_grid].numDimensions()) if i != d])
-            final_vals = final_vals + [cp.asnumpy(cp.sum(self.grids[self.current_grid].data, other_dims),order='A')]
+            final_vals = final_vals + [cp.asnumpy(cp.sum(self.grids[self.current_grid].data, other_dims))]
             final_vs = final_vs + [np.linspace(self.grids[self.current_grid].base[d],self.grids[self.current_grid].base[d] + self.grids[self.current_grid].size[d],self.grids[self.current_grid].res[d])]
 
         return final_vs, final_vals
