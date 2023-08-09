@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 from scipy.stats import poisson
 
+import cupy as cp
+
 import time
 
 from popdynamics.popsolver import Solver
@@ -186,9 +188,15 @@ for iteration in range(101):
 
     # GPU Solver
     if use_gpu_solver:
+        for i, a in np.ndenumerate(cp.asnumpy(gpu_solver.grids[gpu_solver.current_grid].data)):
+          if a > 0.000001:
+            print(i, a, gpu_solver.grids[gpu_solver.current_grid].getCellNum(i))
+        print("before")
         gpu_solver.updateDeterministic()
-        gpu_solver.applyNoiseKernels()
-
+        #gpu_solver.applyNoiseKernels()
+        for i, a in np.ndenumerate(cp.asnumpy(gpu_solver.grids[gpu_solver.current_grid].data)):
+          if a > 0.000001:
+            print(i, a, gpu_solver.grids[gpu_solver.current_grid].getCellNum(i))
     # Also run the monte carlo simulation 
 
     if use_monte_carlo:
@@ -204,7 +212,7 @@ for iteration in range(101):
             mc_neurons[nn][1] += epsp*poisson.rvs(w_rate*0.1) # override w
             mc_neurons[nn][2] += ipsp*poisson.rvs(u_rate*0.1) # override u  
 
-    if plot_output and (iteration % 10 == 0) :
+    if plot_output and (iteration % 1 == 0) :
         # Plot Monte Carlo
         fig, ax = plt.subplots(2,2)
 
