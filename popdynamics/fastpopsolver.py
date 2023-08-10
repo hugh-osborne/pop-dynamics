@@ -1,6 +1,9 @@
 import numpy as np
 import cupy as cp
 
+from cupyx.scipy.sparse import csr_matrix as cp_csr_matrix
+from scipy.sparse import lil_matrix
+
 class NdGrid:
     def __init__(self, _base, _size, _res, _data=None):
         self.base = _base
@@ -8,7 +11,7 @@ class NdGrid:
         self.res = _res
         if _data is not None:
             self.data = cp.asarray(_data,dtype=cp.float32)
-            self.data = cp.reshape(self.data, self.data.shape, order='C')
+            self.data = cp.ravel(self.data, order='A')
 
         temp_res_offsets = [1]
         self.res_offsets = self.calcResOffsets(1, temp_res_offsets, self.res)
@@ -21,11 +24,14 @@ class NdGrid:
             self.total_cells *= r
 
     def readData(self):
-        return cp.asnumpy(self.data)
+        return cp.asnumpy(cp.reshape(self.data, self.res, order='A'))
 
     def updateData(self, _data):
         self.data = cp.asarray(_data,dtype=cp.float32)
-        self.data = cp.reshape(self.data, self.data.shape, order='C')
+        self.data = cp.ravel(self.data, order='A')
+
+    def getTransposed(self, _ord):
+        return cp.ravel(cp.transpose(cp.reshape(self.data, self.res, order='A'), _ord), order='A')
 
     def calcResOffsets(self, count, offsets, res):
         if len(res) == 1:
@@ -105,62 +111,6 @@ class NdGrid:
     
         return self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_lo], mass*prop_lo) + self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_hi], mass*prop_hi)
 
-class GpuWrapper:
-    def __init__(self):
-        self.cuda_source = r'''
-        extern "C"{
-
-        __device__ int modulo(int a, int b) {
-            int r = a % b;
-            return r < 0 ? r + b : r;
-        }
-
-        __global__ void convolveKernel(
-            unsigned int num_cells,
-            float* grid_out,
-            float* grid_in,
-            float* kernel,
-            unsigned int kernel_width,
-            unsigned int dim_stride)
-        {
-            int index = blockIdx.x * blockDim.x + threadIdx.x;
-            int stride = blockDim.x * gridDim.x;
-
-            for (int i = index; i < num_cells; i += stride) {
-                grid_out[i] = 0.0;
-                for (int j = 0; j < kernel_width; j++) {
-                    grid_out[i] += grid_in[modulo(i - ((j - int(kernel_width/2.0)) * dim_stride), num_cells)] * kernel[j];
-                }
-            }
-        }
-
-        __global__
-        void applyJointTransition(
-            unsigned int num_out_grid_cells,
-            float* out_grid,
-            unsigned int* transition_cells,
-            float* transition_props,
-            unsigned int* transitions_counts,
-            unsigned int* transitions_offsets,
-            float* in_grid) 
-        {
-            int index = blockIdx.x * blockDim.x + threadIdx.x;
-            int stride = blockDim.x * gridDim.x;   
-    
-            for (int i = index; i < num_out_grid_cells; i += stride) {
-                out_grid[i] = 0.0;
-                for (int t = transitions_offsets[i]; t < transitions_offsets[i] + transitions_counts[i]; t++) {
-                    out_grid[i] += in_grid[transition_cells[t]] * transition_props[t];
-                }
-            }
-        }
-
-        }'''
-
-        self.cuda_module = cp.RawModule(code=self.cuda_source)
-        self.cuda_function_applyJointTransition = self.cuda_module.get_function('applyJointTransition')
-        self.cuda_function_convolveKernel = self.cuda_module.get_function('convolveKernel')
-
 class FastSolver:
     def __init__(self, _func, initial_distribution, _base, _size, _res):
         self.grids = [NdGrid(_base, _size, _res, initial_distribution),NdGrid(_base, _size, _res, initial_distribution)]
@@ -168,18 +118,19 @@ class FastSolver:
         self.noise_kernels = []
         self.func = _func
 
+        self.csr = cp_csr_matrix((self.grids[0].total_cells, self.grids[1].total_cells), dtype=cp.float32)
+
         transition_data = self.generateConditionalTransitionCSR(self.grids[0], _func, self.grids[1])
         self.transition_data = [cp.asarray(transition_data[0]),cp.asarray(transition_data[1],dtype=cp.float32), cp.asarray(transition_data[2]), cp.asarray(transition_data[3])]
         for a in self.transition_data:
-            a = cp.reshape(a, a.shape, order='C')
-
-        self.gpu_worker = GpuWrapper()
+            a = cp.reshape(a, a.shape, order='A')
 
     def generateConditionalTransitionCSR(self, grid_in, func, grid_out):
         transitions = [[] for a in range(grid_out.total_cells)]
     
         offset = 0
         num_transitions = 0
+        lil_mat = lil_matrix((self.grids[self.current_grid].total_cells,self.grids[self.current_grid].total_cells))
         for r in range(grid_in.total_cells):
             start_point = grid_in.getCellCentroid(r)
             ts = grid_in.calcTransitions(start_point, func(start_point), grid_in.getCellCoords(r))
@@ -189,8 +140,11 @@ class FastSolver:
                     out_cell = 0
                 if out_cell >= grid_out.total_cells:
                     out_cell = grid_out.total_cells - 1
+                lil_mat[out_cell,r] = t[0]
                 transitions[out_cell] = transitions[out_cell] + [(r,t[0])]
                 num_transitions += 1
+
+        self.csr = cp_csr_matrix(lil_mat)
 
         out_transitions_cells = [a for a in range(num_transitions)]
         out_transitions_props = [a for a in range(num_transitions)]
@@ -216,7 +170,7 @@ class FastSolver:
     # Currently, just allow 1D arrays for noise and pair it with a dimension. 
     # Later we should allow the definition of ND kernels.
     def addNoiseKernel(self, _base, _size, _res, kernel_data, dimension):
-        self.noise_kernels = self.noise_kernels + [(self.grids[self.current_grid].res_offsets[dimension], NdGrid([_base], [_size], [_res], kernel_data))]
+        self.noise_kernels = self.noise_kernels + [(dimension, NdGrid([_base], [_size], [_res], kernel_data))]
 
     # Do CPU marginal calculation for now. Slow because we need to move the full distribution off card
     def calcMarginals(self):
@@ -224,17 +178,32 @@ class FastSolver:
         final_vs = []
         for d in range(self.grids[self.current_grid].numDimensions()):
             other_dims = tuple([i for i in range(self.grids[self.current_grid].numDimensions()) if i != d])
-            final_vals = final_vals + [cp.asnumpy(cp.sum(self.grids[self.current_grid].data, other_dims))]
+            final_vals = final_vals + [np.sum(self.grids[self.current_grid].readData(), other_dims)]
             final_vs = final_vs + [np.linspace(self.grids[self.current_grid].base[d],self.grids[self.current_grid].base[d] + self.grids[self.current_grid].size[d],self.grids[self.current_grid].res[d])]
 
         return final_vs, final_vals
 
     def updateDeterministic(self):
-        self.gpu_worker.cuda_function_applyJointTransition((self.grids[self.current_grid].total_cells,),(128,), (self.grids[self.current_grid].total_cells,self.grids[(self.current_grid+1)%2].data, self.transition_data[0], self.transition_data[1], self.transition_data[2], self.transition_data[3], self.grids[self.current_grid].data))
+        print(self.csr.shape, self.grids[self.current_grid].data.ndim)
+        #self.gpu_worker.cuda_function_applyJointTransition((self.grids[self.current_grid].total_cells,),(128,), (self.grids[self.current_grid].total_cells,self.grids[(self.current_grid+1)%2].data, self.transition_data[0], self.transition_data[1], self.transition_data[2], self.transition_data[3], self.grids[self.current_grid].data))
+        self.grids[(self.current_grid+1)%2].updateData(self.csr.dot(self.grids[self.current_grid].data))
         self.current_grid = (self.current_grid+1)%2
 
     def applyNoiseKernels(self):
         for kernel in self.noise_kernels:
-            self.gpu_worker.cuda_function_convolveKernel((self.grids[self.current_grid].total_cells,),(128,), (self.grids[self.current_grid].total_cells, self.grids[(self.current_grid+1)%2].data,self.grids[self.current_grid].data, kernel[1].data, kernel[1].res[0], kernel[0]))
+            dim_order = [i for i in range(self.grids[self.current_grid].numDimensions()) if i != kernel[0]]
+            dim_order = dim_order + [kernel[0]]
+            inv_order = [a for a in range(self.grids[self.current_grid].numDimensions())]
+            d_rep = 0
+            for d in range(self.grids[self.current_grid].numDimensions()):
+                if d == kernel[0]:
+                    inv_order[d] = self.grids[self.current_grid].numDimensions()-1
+                else:
+                    inv_order[d] = d_rep
+                    d_rep += 1
+            print(dim_order, inv_order)
+            self.grids[(self.current_grid+1)%2].updateData(cp.convolve(self.grids[self.current_grid].getTransposed(dim_order), kernel[1].data, mode='same'))
+            self.grids[(self.current_grid+1)%2].updateData(self.grids[(self.current_grid+1)%2].getTransposed(inv_order))
+            #self.gpu_worker.cuda_function_convolveKernel((self.grids[self.current_grid].total_cells,),(128,), (self.grids[self.current_grid].total_cells, self.grids[(self.current_grid+1)%2].data,self.grids[self.current_grid].data, kernel[1].data, kernel[1].res[0], kernel[0]))
             self.current_grid = (self.current_grid+1)%2
 
