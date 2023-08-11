@@ -72,7 +72,7 @@ updf = [a / sum(updf) for a in updf]
 
 # Poisson inputs
 
-w_rate = 0
+w_rate = 4
 epsp = 0.5
 wI_max_events = 5
 wI_min_events = -5
@@ -109,7 +109,7 @@ for i in range(I_res):
     else:
         val_counter += wIpdf[i]
 
-u_rate = 4
+u_rate = 2
 ipsp = 0.5
 uI_max_events = 5
 uI_min_events = -5
@@ -183,27 +183,21 @@ for iteration in range(101):
 
     # CPU Solver
     if use_cpu_solver:
-        #solver.updateDeterministic()
+        solver.updateDeterministic()
         solver.applyNoiseKernels()
 
     # GPU Solver
     if use_gpu_solver:
-        for i, a in np.ndenumerate(gpu_solver.grids[gpu_solver.current_grid].readData()):
-          if a > 0.000001:
-            print(i, a, gpu_solver.grids[gpu_solver.current_grid].getCellNum(i))
-        print("before")
-        #gpu_solver.updateDeterministic()
+        gpu_solver.updateDeterministic()
         gpu_solver.applyNoiseKernels()
-        for i, a in np.ndenumerate(gpu_solver.grids[gpu_solver.current_grid].readData()):
-          if a > 0.000001:
-            print(i, a, gpu_solver.grids[gpu_solver.current_grid].getCellNum(i))
+
     # Also run the monte carlo simulation 
 
     if use_monte_carlo:
         fired_count = 0
 
         for nn in range(len(mc_neurons)):
-            #mc_neurons[nn] = cond(mc_neurons[nn])
+            mc_neurons[nn] = cond(mc_neurons[nn])
         
             if (mc_neurons[nn][0] > -50.0):
                 mc_neurons[nn][0] = -70.6
