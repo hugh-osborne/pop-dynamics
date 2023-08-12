@@ -12,7 +12,7 @@ from popdynamics.fastpopsolver import FastSolver
 
 use_monte_carlo = True
 use_cpu_solver = True
-use_gpu_solver = True
+use_gpu_solver = False
 plot_output = True
 
 def cond(y):
@@ -45,7 +45,7 @@ def cond(y):
 v_res = 100
 w_res = 100
 u_res = 100
-I_res = 100
+I_res = 101
 
 v_max = -40.0
 v_min = -80.0
@@ -94,18 +94,19 @@ for i in range(len(wI_events)-1):
 wIpdf = wIpdf_final
 
 
-wI_res = int((wI_max-wI_min) / ((w_max-w_min)/w_res))+1
+wI_res = int((wI_max-wI_min) / ((w_max-w_min)/w_res))
+if (wI_res % 2) == 0:
+    wI_res += 1
 pymiind_wI = [0 for a in range(wI_res)]
 ratio = I_res / wI_res
 val_counter = 0.0
-pos_counter = 0
+target_counter = 0
 for i in range(I_res):
-    pos_counter += 1
-    if pos_counter > ratio:
-        pos_counter = 0
-        val_counter += wIpdf[i] * (i % ratio)
-        pymiind_wI[int(i/ratio)] = val_counter
-        val_counter = wIpdf[i] * (1.0-(i % ratio))
+    if i+1 > ratio*(target_counter+1):
+        val_counter += wIpdf[i] * (((ratio*(target_counter+1)) - i))
+        pymiind_wI[target_counter] = val_counter
+        val_counter = wIpdf[i] * (1.0-(((ratio*(target_counter+1)) - i)))
+        target_counter += 1
     else:
         val_counter += wIpdf[i]
 
@@ -130,20 +131,30 @@ for i in range(len(uI_events)-1):
         uIpdf_final[i+1] += poisson.pmf(e, u_rate*0.1) * upper_prop
 uIpdf = uIpdf_final
 
-uI_res = int((uI_max-uI_min) / ((u_max-u_min)/u_res))+1
+uI_res = int((uI_max-uI_min) / ((u_max-u_min)/u_res))
+if (uI_res % 2) == 0:
+    uI_res += 1
 pymiind_uI = [0 for a in range(uI_res)]
 ratio = I_res / uI_res
 val_counter = 0.0
-pos_counter = 0
+target_counter = 0
 for i in range(I_res):
-    pos_counter += 1
-    if pos_counter > ratio:
-        pos_counter = 0
-        val_counter += uIpdf[i] * (i % ratio)
-        pymiind_uI[int(i/ratio)] = val_counter
-        val_counter = uIpdf[i] * (1.0-(i % ratio))
+    if i+1 > ratio*(target_counter+1):
+        val_counter += uIpdf[i] * (((ratio*(target_counter+1)) - i))
+        pymiind_uI[target_counter] = val_counter
+        val_counter = uIpdf[i] * (1.0-(((ratio*(target_counter+1)) - i)))
+        target_counter += 1
     else:
         val_counter += uIpdf[i]
+
+fig, ax = plt.subplots(2,2)
+ax[0,0].plot(uIpdf)
+ax[1,0].plot(pymiind_uI)
+ax[0,1].plot(wIpdf)
+ax[1,1].plot(pymiind_wI)
+
+fig.tight_layout()
+plt.show()
 
 # Initialise the monte carlo neurons
 if use_monte_carlo:

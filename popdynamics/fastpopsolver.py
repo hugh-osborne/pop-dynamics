@@ -170,20 +170,7 @@ class FastSolver:
     # Currently, just allow 1D arrays for noise and pair it with a dimension. 
     # Later we should allow the definition of ND kernels.
     def addNoiseKernel(self, _base, _size, _res, kernel_data, dimension):
-
-        # store kernels as csrs
-        lil_mat = lil_matrix((self.grids[self.current_grid].total_cells,self.grids[self.current_grid].total_cells))
-
-        for r in range(self.grids[self.current_grid].total_cells):
-            for k in range(len(kernel_data)):
-                idx = r - int(len(kernel_data)/2) + k
-                if idx < 0:
-                    idx = 0
-                if idx >= self.grids[self.current_grid].total_cells:
-                    idx = self.grids[self.current_grid].total_cells - 1
-                lil_mat[idx,r] = kernel_data[k]
-
-        self.noise_kernels = self.noise_kernels + [cp_csr_matrix(lil_mat)]
+        self.noise_kernels = self.noise_kernels + [(dimension, cp.asarray(kernel_data, dtype=cp.float32))]
 
     # Do CPU marginal calculation for now. Slow because we need to move the full distribution off card
     def calcMarginals(self):
@@ -202,5 +189,22 @@ class FastSolver:
 
     def applyNoiseKernels(self):
         for kernel in self.noise_kernels:
-            self.grids[(self.current_grid+1)%2].updateData(kernel.dot(self.grids[self.current_grid].data))
+            dim_order = [i for i in range(self.grids[self.current_grid].numDimensions()) if i != kernel[0]]
+            dim_order = dim_order + [kernel[0]]
+            inv_order = [a for a in range(self.grids[self.current_grid].numDimensions())]
+            d_rep = 0
+            for d in range(self.grids[self.current_grid].numDimensions()):
+                if d == kernel[0]:
+                    inv_order[d] = self.grids[self.current_grid].numDimensions()-1
+                else:
+                    inv_order[d] = d_rep
+                    d_rep += 1
+            # Transpose the grid to make the contiguous dimension the same as the desired kernel dimension.
+            transposed_grid = self.grids[self.current_grid].getTransposed(dim_order)
+            # Apply the convolution.
+            self.grids[(self.current_grid+1)%2].updateData(cp.convolve(transposed_grid, kernel[1], mode='same'))
+            # Transpose back to the original dimension order.
+            transposed_grid = self.grids[(self.current_grid+1)%2].getTransposed(inv_order)
+            # Update the next grid.
+            self.grids[(self.current_grid+1)%2].updateData(transposed_grid)
             self.current_grid = (self.current_grid+1)%2
