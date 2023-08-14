@@ -12,7 +12,7 @@ from popdynamics.fastpopsolver import FastSolver
 
 use_monte_carlo = True
 use_cpu_solver = True
-use_gpu_solver = False
+use_gpu_solver = True
 plot_output = True
 
 def cond(y):
@@ -42,7 +42,7 @@ def cond(y):
 
     return [nv, w + 0.1*w_prime, u + 0.1*u_prime]
 
-v_res = 100
+v_res = 50
 w_res = 100
 u_res = 100
 I_res = 101
@@ -147,15 +147,6 @@ for i in range(I_res):
     else:
         val_counter += uIpdf[i]
 
-fig, ax = plt.subplots(2,2)
-ax[0,0].plot(uIpdf)
-ax[1,0].plot(pymiind_uI)
-ax[0,1].plot(wIpdf)
-ax[1,1].plot(pymiind_wI)
-
-fig.tight_layout()
-plt.show()
-
 # Initialise the monte carlo neurons
 if use_monte_carlo:
     mc_neurons = np.array([[norm.rvs(-70.6, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0]] for a in range(5000)])
@@ -185,8 +176,8 @@ if use_cpu_solver:
 if use_gpu_solver:
     perf_time = time.perf_counter()
     gpu_solver = FastSolver(cond, initial_dist, [v_min, w_min, u_min], [v_max-v_min, w_max-w_min, u_max-u_min], [v_res, w_res, u_res])
-    gpu_solver.addNoiseKernel(wI_min, wI_max-wI_min, wI_res, pymiind_wI, 1)
-    gpu_solver.addNoiseKernel(uI_min, uI_max-uI_min, uI_res, pymiind_uI, 2)
+    gpu_solver.addNoiseKernel(pymiind_wI, 1)
+    gpu_solver.addNoiseKernel(pymiind_uI, 2)
     print("GPU Setup time:", time.perf_counter() - perf_time)
 
 perf_time = time.perf_counter()
@@ -195,12 +186,12 @@ for iteration in range(101):
     # CPU Solver
     if use_cpu_solver:
         solver.updateDeterministic()
-        solver.applyNoiseKernels()
+        #solver.applyNoiseKernels()
 
     # GPU Solver
     if use_gpu_solver:
         gpu_solver.updateDeterministic()
-        gpu_solver.applyNoiseKernels()
+        #gpu_solver.applyNoiseKernels()
 
     # Also run the monte carlo simulation 
 
@@ -214,8 +205,8 @@ for iteration in range(101):
                 mc_neurons[nn][0] = -70.6
                 fired_count+=1
                 
-            mc_neurons[nn][1] += epsp*poisson.rvs(w_rate*0.1) # override w
-            mc_neurons[nn][2] += ipsp*poisson.rvs(u_rate*0.1) # override u  
+            #mc_neurons[nn][1] += epsp*poisson.rvs(w_rate*0.1) # override w
+            #mc_neurons[nn][2] += ipsp*poisson.rvs(u_rate*0.1) # override u  
             
     if plot_output and (iteration % 1 == 0) :
         # Plot Monte Carlo
