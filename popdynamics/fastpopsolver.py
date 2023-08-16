@@ -12,7 +12,7 @@ class NdGrid:
         if _data is not None:
             self.data = cp.asarray(_data,dtype=cp.float32)
             self.data = cp.ravel(self.data, order='C')
-
+            
         temp_res_offsets = [1]
         r = [a for a in self.res]
         r.reverse()
@@ -73,10 +73,10 @@ class NdGrid:
     def getCellCentroid(self, cell_num):
         coords = self.getCellCoords(cell_num)
         centroid = [0 for a in range(self.numDimensions())]
-
+        
         for d in range(self.numDimensions()):
             centroid[d] = self.base[d] + ((coords[d]+0.5)*self.cell_widths[d])
-        
+
         return centroid
 
     def calcTransitions(self, centroid, stepped_centroid, coord, d=0, target_coord=[], mass=1.0):
@@ -84,14 +84,16 @@ class NdGrid:
             return [(mass, target_coord)]
 
         diff = stepped_centroid[d] - centroid[d]
+        
         cell_lo = coord[d] + int(abs(diff) / self.cell_widths[d])
         cell_hi = cell_lo + 1
         prop_lo = 0.0
         if diff < 0.0: # actually, diff is negative so cell_lo is the upper cell
+            cell_lo = coord[d] - int(abs(diff) / self.cell_widths[d])
             cell_hi = cell_lo - 1
-            prop_lo = ((abs(diff) % self.cell_widths[d]) / self.cell_widths[d])
-        else:
-            prop_lo = 1.0 - ((abs(diff) % self.cell_widths[d]) / self.cell_widths[d])
+
+
+        prop_lo = 1.0 - ((abs(diff) % self.cell_widths[d]) / self.cell_widths[d])
         prop_hi = 1.0 - prop_lo
     
         return self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_lo], mass*prop_lo) + self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_hi], mass*prop_hi)
@@ -116,7 +118,7 @@ class FastSolver:
                     out_cell = 0
                 if out_cell >= grid_out.total_cells:
                     out_cell = grid_out.total_cells - 1
-                lil_mat[r,out_cell] = t[0]
+                lil_mat[out_cell, r] = t[0]
 
         return cp_csr_matrix(lil_mat)
 

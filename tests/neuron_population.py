@@ -42,7 +42,7 @@ def cond(y):
 
     return [nv, w + 0.1*w_prime, u + 0.1*u_prime]
 
-v_res = 50
+v_res = 100
 w_res = 100
 u_res = 100
 I_res = 101
@@ -161,8 +161,7 @@ for cv in range(v_res):
     for cw in range(w_res):
         for cu in range(u_res):
             initial_dist[cv,cw,cu] = vpdf[cv]*wpdf[cw]*updf[cu]
-
-
+            
 if use_cpu_solver:
     perf_time = time.perf_counter()
     solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001)
@@ -186,12 +185,12 @@ for iteration in range(101):
     # CPU Solver
     if use_cpu_solver:
         solver.updateDeterministic()
-        #solver.applyNoiseKernels()
+        solver.applyNoiseKernels()
 
     # GPU Solver
     if use_gpu_solver:
         gpu_solver.updateDeterministic()
-        #gpu_solver.applyNoiseKernels()
+        gpu_solver.applyNoiseKernels()
 
     # Also run the monte carlo simulation 
 
@@ -205,8 +204,8 @@ for iteration in range(101):
                 mc_neurons[nn][0] = -70.6
                 fired_count+=1
                 
-            #mc_neurons[nn][1] += epsp*poisson.rvs(w_rate*0.1) # override w
-            #mc_neurons[nn][2] += ipsp*poisson.rvs(u_rate*0.1) # override u  
+            mc_neurons[nn][1] += epsp*poisson.rvs(w_rate*0.1) # override w
+            mc_neurons[nn][2] += ipsp*poisson.rvs(u_rate*0.1) # override u  
             
     if plot_output and (iteration % 1 == 0) :
         # Plot Monte Carlo
