@@ -63,7 +63,7 @@ u = np.linspace(u_min, u_max, u_res)
 # Unfortunately stats.norm doesn't provide a nice pmf approximation of the pdf. 
 # So let's just do that ourselves without breaking our backs by multiplying across by the discretisation width and normalising
 vpdf = [a * ((v_max-v_min)/v_res) for a in norm.pdf(v, -70.6, 0.1)]
-wpdf = [a * ((w_max-w_min)/w_res) for a in norm.pdf(w, 0.0, 0.1)]
+wpdf = [a * ((w_max-w_min)/w_res) for a in norm.pdf(w, 5.0, 0.1)]
 updf = [a * ((u_max-u_min)/u_res) for a in norm.pdf(u, 0.0, 0.1)]
 
 vpdf = [a / sum(vpdf) for a in vpdf]
@@ -149,7 +149,7 @@ for i in range(I_res):
 
 # Initialise the monte carlo neurons
 if use_monte_carlo:
-    mc_neurons = np.array([[norm.rvs(-70.6, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0]] for a in range(5000)])
+    mc_neurons = np.array([[norm.rvs(-70.6, 0.1, 1)[0],norm.rvs(5.0, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0]] for a in range(5000)])
 
 
 # CPU solver
@@ -163,9 +163,9 @@ for cv in range(v_res):
             initial_dist[cv,cw,cu] = vpdf[cv]*wpdf[cw]*updf[cu]
 
 training_data = []
-v_res_train = 20
-w_res_train = 20
-u_res_train = 20
+v_res_train = 50
+w_res_train = 50
+u_res_train = 50
 for cv in range(v_res_train):
     for cw in range(w_res_train):
         for cu in range(u_res_train):
@@ -177,14 +177,15 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 
 model = Sequential()
-model.add(Dense(100, input_shape=(3,)))
+model.add(Dense(100, input_shape=(3,), activation='relu'))
+model.add(Dense(100, activation='relu'))
 model.add(Dense(3))
 
-model.compile(loss='msle', optimizer='rmsprop', metrics=['accuracy'])
+model.compile(loss='mse', optimizer='rmsprop', metrics=['accuracy'])
 
 training_data = np.array(training_data)
 
-model.fit(training_data[:,0:3], training_data[:,3:6], epochs=500, batch_size=500, verbose=0)
+model.fit(training_data[:,0:3], training_data[:,3:6], epochs=200, batch_size=10, verbose=0)
 
 print([-70.6, 5.0, 0.0], "->", model.predict(np.array([[-70.6, 5.0, 0.0]]),verbose=0)[0])
 def learned_cond(y):
