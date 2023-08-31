@@ -177,15 +177,14 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 
 model = Sequential()
-model.add(Dense(100, input_shape=(3,), activation='relu'))
-model.add(Dense(100, activation='relu'))
+model.add(Dense(200, input_shape=(3,), activation='relu'))
 model.add(Dense(3))
 
 model.compile(loss='mse', optimizer='rmsprop', metrics=['accuracy'])
 
 training_data = np.array(training_data)
 
-model.fit(training_data[:,0:3], training_data[:,3:6], epochs=200, batch_size=10, verbose=0)
+model.fit(training_data[:,0:3], training_data[:,3:6], epochs=100, batch_size=10, verbose=0)
 
 print([-70.6, 5.0, 0.0], "->", model.predict(np.array([[-70.6, 5.0, 0.0]]),verbose=0)[0])
 def learned_cond(y):
