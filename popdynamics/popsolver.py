@@ -1,7 +1,8 @@
 import numpy as np
+from .visualiser import Visualiser
 
 class Solver:
-    def __init__(self, _func, initial_distribution, _base, _cell_widths, _mass_epsilon):
+    def __init__(self, _func, initial_distribution, _base, _cell_widths, _mass_epsilon, _vis=None):
         self.dims = _base.shape[0]
         self.cell_widths = _cell_widths
 
@@ -15,6 +16,9 @@ class Solver:
 
         self.mass_epsilon = _mass_epsilon
         self.func = _func
+
+        self.visualiser = _vis
+        self.coord_extent = np.ones(self.dims) # The number of cells in each dimension direction
 
         first_cell = True
         cell_base_coords = np.zeros(self.dims)
@@ -155,3 +159,14 @@ class Solver:
                 self.cell_buffers[(self.current_buffer+1)%2].pop(a, None)
 
             self.current_buffer = (self.current_buffer+1)%2
+
+    def draw(self):
+        max_coords = self.coord_extent
+        min_coords = self.coord_extent
+        for a in self.cell_buffers[self.current_buffer].keys():
+            max_coords = (max(max_coords[0],a[0]),max(max_coords[1],a[1]),max(max_coords[2],a[2]))
+            min_coords = (min(min_coords[0],a[0]),min(min_coords[1],a[1]),min(min_coords[2],a[2]))
+        self.coord_extent = (max_coords[0]-min_coords[0]+1, max_coords[1]-min_coords[1]+1, max_coords[2]-min_coords[2]+1)
+
+        for a in self.cell_buffers[self.current_buffer].keys():
+            self.visualiser.drawCell(a, self.cell_buffers[self.current_buffer][a][0], origin_location=(0.0,0.0,0.0), max_size=(2.0,2.0,2.0), max_res=self.coord_extent)
