@@ -4,6 +4,8 @@ import cupy as cp
 from cupyx.scipy.sparse import csr_matrix as cp_csr_matrix
 from scipy.sparse import lil_matrix
 
+from .visualiser import Visualiser
+
 class NdGrid:
     def __init__(self, _base, _size, _res, _data=None):
         self.base = [a for a in _base]
@@ -99,11 +101,13 @@ class NdGrid:
         return self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_lo], mass*prop_lo) + self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_hi], mass*prop_hi)
 
 class FastSolver:
-    def __init__(self, _func, initial_distribution, _base, _size, _res):
+    def __init__(self, _func, initial_distribution, _base, _size, _res, _vis=None):
         self.grids = [NdGrid(_base, _size, _res, initial_distribution),NdGrid(_base, _size, _res, initial_distribution)]
         self.current_grid = 0
         self.noise_kernels = []
         self.func = _func
+
+        self.visualiser = _vis
         
         self.csr = self.generateConditionalTransitionCSR(self.grids[0], _func, self.grids[1])
 
@@ -165,3 +169,20 @@ class FastSolver:
             # Update the next grid.
             self.grids[(self.current_grid+1)%2].updateData(transposed_grid)
             self.current_grid = (self.current_grid+1)%2
+
+    def draw(self):
+        if not self.visualiser.beginRendering():
+            return
+
+        data = self.grids[self.current_grid].readData()
+
+        self.max_mass = 0.0
+        for idx,a in np.ndenumerate(data):
+            self.max_mass = max(self.max_mass, a)
+
+        for idx,a in np.ndenumerate(data):
+            if a < 0.000001:
+                continue
+            self.visualiser.drawCell(idx, a / self.max_mass, origin_location=(0.0,0.0,0.0), max_size=(2.0,2.0,2.0), max_res=self.grids[0].res)
+
+        self.visualiser.endRendering()

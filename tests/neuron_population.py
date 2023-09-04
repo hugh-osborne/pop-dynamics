@@ -12,8 +12,8 @@ from popdynamics.fastpopsolver import FastSolver
 from popdynamics.visualiser import Visualiser
 
 use_monte_carlo = True
-use_cpu_solver = True
-use_gpu_solver = False
+use_cpu_solver = False
+use_gpu_solver = True
 plot_output = False
 
 def cond(y):
@@ -165,9 +165,9 @@ for cv in range(v_res):
             
 if use_cpu_solver:
     perf_time = time.perf_counter()
-    vis = Visualiser()
-    vis.setupVisuliser()
-    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001, vis)
+    cpu_vis = Visualiser()
+    cpu_vis.setupVisuliser()
+    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001, cpu_vis)
     solver.addNoiseKernel(pymiind_wI, 1)
     solver.addNoiseKernel(pymiind_uI, 2)
     print("CPU Setup time:", time.perf_counter() - perf_time)
@@ -177,7 +177,9 @@ if use_cpu_solver:
 
 if use_gpu_solver:
     perf_time = time.perf_counter()
-    gpu_solver = FastSolver(cond, initial_dist, [v_min, w_min, u_min], [v_max-v_min, w_max-w_min, u_max-u_min], [v_res, w_res, u_res])
+    gpu_vis = Visualiser()
+    gpu_vis.setupVisuliser()
+    gpu_solver = FastSolver(cond, initial_dist, [v_min, w_min, u_min], [v_max-v_min, w_max-w_min, u_max-u_min], [v_res, w_res, u_res],gpu_vis)
     gpu_solver.addNoiseKernel(pymiind_wI, 1)
     gpu_solver.addNoiseKernel(pymiind_uI, 2)
     print("GPU Setup time:", time.perf_counter() - perf_time)
@@ -195,6 +197,7 @@ for iteration in range(101):
     if use_gpu_solver:
         gpu_solver.updateDeterministic()
         gpu_solver.applyNoiseKernels()
+        gpu_solver.draw()
 
     # Also run the monte carlo simulation 
 
