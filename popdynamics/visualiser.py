@@ -12,6 +12,7 @@ from OpenGL.GLU import *
 
 class Visualiser:
     def __init__(self):
+        self.closed = False
         self.verts = (
          (1, -1, -1),
          (1, 1, -1),
@@ -50,9 +51,13 @@ class Visualiser:
         glEnd()
 
     def drawCell(self, cell_coords, cell_mass, origin_location=(0.0,0.0,0.0), max_size=(2.0,2.0,2.0), max_res=(10,10,10)):
+        if self.closed:
+            return
+
         widths = (max_size[0]/max_res[0], max_size[1]/max_res[1], max_size[2]/max_res[2])
         pos = (origin_location[0] - (max_size[0]/2.0) + ((cell_coords[0]+0.5)*widths[0]), origin_location[1] - (max_size[1]/2.0) + ((cell_coords[1]+0.5)*widths[1]), origin_location[2] - (max_size[2]/2.0) + ((cell_coords[2]+0.5)*widths[2]))
-        self.cube(pos, scale=widths, col=(cell_mass,0,0,0.1))
+        
+        self.cube(pos, scale=widths, col=(1.0,0,0,cell_mass))
 
     def setupVisuliser(self, display_size=(800,800)):
         pygame.init()
@@ -66,17 +71,27 @@ class Visualiser:
         glRotatef(0, 0, 0, 0)
 
     def beginRendering(self):
+        if self.closed:
+            return False
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit()
+                self.closed = True
+                #quit()
                 
-        glRotatef(1, 3, 1, 1)
-        
+        #glRotatef(1, 3, 1, 1)
+        if self.closed:
+            return False
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
 
+        return True
+
 
     def endRendering(self):
+        if self.closed:
+            return
+
         pygame.display.flip()
         pygame.time.wait(10)

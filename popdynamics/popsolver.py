@@ -19,6 +19,7 @@ class Solver:
 
         self.visualiser = _vis
         self.coord_extent = np.ones(self.dims) # The number of cells in each dimension direction
+        self.max_mass = 1.0
 
         first_cell = True
         cell_base_coords = np.zeros(self.dims)
@@ -161,12 +162,18 @@ class Solver:
             self.current_buffer = (self.current_buffer+1)%2
 
     def draw(self):
-        max_coords = self.coord_extent
-        min_coords = self.coord_extent
+        if not self.visualiser.beginRendering():
+            return
+        max_coords = (1,1,1)
+        min_coords = (1,1,1)
+        self.max_mass = 0.0
         for a in self.cell_buffers[self.current_buffer].keys():
             max_coords = (max(max_coords[0],a[0]),max(max_coords[1],a[1]),max(max_coords[2],a[2]))
             min_coords = (min(min_coords[0],a[0]),min(min_coords[1],a[1]),min(min_coords[2],a[2]))
-        self.coord_extent = (max_coords[0]-min_coords[0]+1, max_coords[1]-min_coords[1]+1, max_coords[2]-min_coords[2]+1)
+            self.max_mass = max(self.max_mass, self.cell_buffers[self.current_buffer][a][0])
+        self.coord_extent = (max(10,max_coords[0]-min_coords[0]+1), max(10,max_coords[1]-min_coords[1]+1), max(10,max_coords[2]-min_coords[2]+1))
 
         for a in self.cell_buffers[self.current_buffer].keys():
-            self.visualiser.drawCell(a, self.cell_buffers[self.current_buffer][a][0], origin_location=(0.0,0.0,0.0), max_size=(2.0,2.0,2.0), max_res=self.coord_extent)
+            self.visualiser.drawCell(a, self.cell_buffers[self.current_buffer][a][0] / self.max_mass, origin_location=(0.0,0.0,0.0), max_size=(2.0,2.0,2.0), max_res=self.coord_extent)
+
+        self.visualiser.endRendering()

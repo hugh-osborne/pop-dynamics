@@ -14,7 +14,7 @@ from popdynamics.visualiser import Visualiser
 use_monte_carlo = True
 use_cpu_solver = True
 use_gpu_solver = False
-plot_output = True
+plot_output = False
 
 def cond(y):
     E_l = -70.6
@@ -181,9 +181,7 @@ if use_gpu_solver:
     gpu_solver.addNoiseKernel(pymiind_wI, 1)
     gpu_solver.addNoiseKernel(pymiind_uI, 2)
     print("GPU Setup time:", time.perf_counter() - perf_time)
-
-vis.beginRendering()
-
+    
 perf_time = time.perf_counter()
 for iteration in range(101):
 
@@ -250,5 +248,3 @@ for iteration in range(101):
         plt.show()
 
 print("Total simulation time:", time.perf_counter() - perf_time)
-
-vis.endRendering()
