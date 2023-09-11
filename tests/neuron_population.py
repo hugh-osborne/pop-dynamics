@@ -170,7 +170,7 @@ if use_cpu_solver:
     if use_visualiser:
         cpu_vis = Visualiser()
         cpu_vis.setupVisuliser()
-    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001, cpu_vis, vis_dimensions=tuple([0]))
+    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001, cpu_vis, vis_dimensions=tuple([0,1,2]))
     solver.addNoiseKernel(pymiind_wI, 1)
     solver.addNoiseKernel(pymiind_uI, 2)
     print("CPU Setup time:", time.perf_counter() - perf_time)

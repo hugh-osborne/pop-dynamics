@@ -193,8 +193,8 @@ class Solver:
 
         mcoords, mcentroids, mvals = self.calcMarginal(self.vis_dimensions)
         for a in range(len(mvals)):
-            max_coords = tuple([max(max_coords[self.vis_dimensions[i]],mcoords[a][i]) for i in range(len(self.vis_dimensions))])
-            min_coords = tuple([min(min_coords[self.vis_dimensions[i]],mcoords[a][i]) for i in range(len(self.vis_dimensions))])
+            max_coords = tuple([max(max_coords[i],mcoords[a][i]) for i in range(len(self.vis_dimensions))])
+            min_coords = tuple([min(min_coords[i],mcoords[a][i]) for i in range(len(self.vis_dimensions))])
             self.max_mass = max(self.max_mass, mvals[a])
         self.coord_extent = tuple([max(10,max_coords[a]-min_coords[a]+1) for a in range(len(self.vis_dimensions))])
         
