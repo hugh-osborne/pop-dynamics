@@ -184,7 +184,7 @@ class Solver:
 
             self.current_buffer = (self.current_buffer+1)%2
 
-    def draw(self):
+    def draw(self, grid_res_override=None):
         if not self.visualiser.beginRendering():
             return
         max_coords = tuple([1 for a in self.vis_dimensions])
@@ -198,7 +198,12 @@ class Solver:
             self.max_mass = max(self.max_mass, mvals[a])
         self.coord_extent = tuple([max(10,max_coords[a]-min_coords[a]+1) for a in range(len(self.vis_dimensions))])
         
+        if grid_res_override != None:
+            self.coord_extent = grid_res_override
+
         for a in range(len(mvals)):
+            if mvals[a] < 0.000001:
+                continue
             self.visualiser.drawCell(mcoords[a], mvals[a] / self.max_mass, origin_location=tuple([0.0 for d in range(len(self.vis_dimensions))]), max_size=tuple([2.0 for d in range(len(self.vis_dimensions))]), max_res=self.coord_extent)
 
         self.visualiser.endRendering()

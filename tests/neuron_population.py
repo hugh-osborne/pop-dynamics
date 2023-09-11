@@ -12,8 +12,8 @@ from popdynamics.fastpopsolver import FastSolver
 from popdynamics.visualiser import Visualiser
 
 use_monte_carlo = True
-use_cpu_solver = True
-use_gpu_solver = False
+use_cpu_solver = False
+use_gpu_solver = True
 plot_output = False
 use_visualiser = True
 
@@ -170,7 +170,7 @@ if use_cpu_solver:
     if use_visualiser:
         cpu_vis = Visualiser()
         cpu_vis.setupVisuliser()
-    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001, cpu_vis, vis_dimensions=tuple([0,1,2]))
+    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001, cpu_vis, vis_dimensions=tuple([0,1]))
     solver.addNoiseKernel(pymiind_wI, 1)
     solver.addNoiseKernel(pymiind_uI, 2)
     print("CPU Setup time:", time.perf_counter() - perf_time)
@@ -184,7 +184,7 @@ if use_gpu_solver:
     if use_visualiser:
         gpu_vis = Visualiser()
         gpu_vis.setupVisuliser()
-    gpu_solver = FastSolver(cond, initial_dist, [v_min, w_min, u_min], [v_max-v_min, w_max-w_min, u_max-u_min], [v_res, w_res, u_res],gpu_vis)
+    gpu_solver = FastSolver(cond, initial_dist, [v_min, w_min, u_min], [v_max-v_min, w_max-w_min, u_max-u_min], [v_res, w_res, u_res],gpu_vis, vis_dimensions=tuple([0,1,2]))
     gpu_solver.addNoiseKernel(pymiind_wI, 1)
     gpu_solver.addNoiseKernel(pymiind_uI, 2)
     print("GPU Setup time:", time.perf_counter() - perf_time)
@@ -197,7 +197,7 @@ for iteration in range(101):
         solver.updateDeterministic()
         solver.applyNoiseKernels()
         if use_visualiser:
-            solver.draw()
+            solver.draw((100,100))
 
     # GPU Solver
     if use_gpu_solver:
@@ -240,15 +240,10 @@ for iteration in range(101):
 
         # Plot GPU Solver marginals
         if use_gpu_solver:
-            mpos, marginals = gpu_solver.calcMarginals()
-
-            marginals[0] = [a / (cell_widths[0]) for a in marginals[0]]
-            marginals[1] = [a / (cell_widths[1]) for a in marginals[1]]
-            marginals[2] = [a / (cell_widths[2]) for a in marginals[2]]
-
-            ax[0,0].plot(mpos[0], marginals[0])
-            ax[0,1].plot(mpos[1], marginals[1])
-            ax[1,0].plot(mpos[2], marginals[2])
+            for d in range(3):
+                vcoords, vpos, v_marginal = gpu_solver.calcMarginal([d])
+                v_marginal = [a / (cell_widths[d]) for a in v_marginal]
+                ax[int(d==2),int(d==1)].plot(vpos, v_marginal)
 
         fig.tight_layout()
         plt.show()

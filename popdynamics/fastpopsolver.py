@@ -101,13 +101,14 @@ class NdGrid:
         return self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_lo], mass*prop_lo) + self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_hi], mass*prop_hi)
 
 class FastSolver:
-    def __init__(self, _func, initial_distribution, _base, _size, _res, _vis=None):
+    def __init__(self, _func, initial_distribution, _base, _size, _res, _vis=None, vis_dimensions=(0,1,2)):
         self.grids = [NdGrid(_base, _size, _res, initial_distribution),NdGrid(_base, _size, _res, initial_distribution)]
         self.current_grid = 0
         self.noise_kernels = []
         self.func = _func
 
         self.visualiser = _vis
+        self.vis_dimensions = vis_dimensions
         
         self.csr = self.generateConditionalTransitionCSR(self.grids[0], _func, self.grids[1])
 
@@ -142,6 +143,22 @@ class FastSolver:
 
         return final_vs, final_vals
 
+    def calcMarginal(self, dimensions, include_epsilon=False):
+        print("slow?")
+        reduced_grid = NdGrid([self.grids[self.current_grid].base[d] for d in dimensions], [self.grids[self.current_grid].size[d] for d in dimensions], [self.grids[self.current_grid].res[d] for d in dimensions])
+        print("1")
+        other_dims = tuple([i for i in range(self.grids[self.current_grid].numDimensions()) if i not in dimensions])
+        final_vals = np.ravel(np.sum(self.grids[self.current_grid].readData(), other_dims))
+        print("2")
+        final_coords = [reduced_grid.getCellCoords(c) for c in range(reduced_grid.total_cells) if final_vals[c] > 0.000001 or include_epsilon]
+        print("3")
+        print("4")
+        final_centroids = [reduced_grid.getCellCentroid(c) for c in range(reduced_grid.total_cells) if final_vals[c] > 0.000001 or include_epsilon]
+        print("5")
+        final_vals = [i for i in final_vals if i > 0.000001 or include_epsilon]
+        print("6")
+        return final_coords, final_centroids, final_vals
+
     def updateDeterministic(self):
         self.grids[(self.current_grid+1)%2].updateData(self.csr.dot(self.grids[self.current_grid].data))
         self.current_grid = (self.current_grid+1)%2
@@ -173,16 +190,16 @@ class FastSolver:
     def draw(self):
         if not self.visualiser.beginRendering():
             return
-
-        data = self.grids[self.current_grid].readData()
-
+        
+        mcoords, mcentroids, mvals = self.calcMarginal(self.vis_dimensions)
+        
         self.max_mass = 0.0
-        for idx,a in np.ndenumerate(data):
-            self.max_mass = max(self.max_mass, a)
-
-        for idx,a in np.ndenumerate(data):
-            if a < 0.000001:
+        for m in mvals:
+            self.max_mass = max(self.max_mass, m)
+        
+        for a in range(len(mvals)):
+            if mvals[a] < 0.000001:
                 continue
-            self.visualiser.drawCell(idx, a / self.max_mass, origin_location=(0.0,0.0,0.0), max_size=(2.0,2.0,2.0), max_res=self.grids[0].res)
-
+            self.visualiser.drawCell(mcoords[a], mvals[a] / self.max_mass, origin_location=tuple([0.0 for d in range(len(self.vis_dimensions))]), max_size=tuple([2.0 for d in range(len(self.vis_dimensions))]), max_res=[self.grids[0].res[d] for d in self.vis_dimensions])
+        
         self.visualiser.endRendering()
