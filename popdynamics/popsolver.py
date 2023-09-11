@@ -2,7 +2,7 @@ import numpy as np
 from .visualiser import Visualiser
 
 class Solver:
-    def __init__(self, _func, initial_distribution, _base, _cell_widths, _mass_epsilon, _vis=None):
+    def __init__(self, _func, initial_distribution, _base, _cell_widths, _mass_epsilon, _vis=None, vis_dimensions=(0,1,2)):
         self.dims = _base.shape[0]
         self.cell_widths = _cell_widths
 
@@ -20,6 +20,7 @@ class Solver:
         self.visualiser = _vis
         self.coord_extent = np.ones(self.dims) # The number of cells in each dimension direction
         self.max_mass = 1.0
+        self.vis_dimensions = vis_dimensions
 
         first_cell = True
         cell_base_coords = np.zeros(self.dims)
@@ -114,6 +115,28 @@ class Solver:
 
         return final_vs, final_vals
 
+    def calcMarginal(self, dimensions):
+        vals = {}
+        for cell_key, cell_val in self.cell_buffers[self.current_buffer].items():
+            reduced_key = tuple([cell_key[a] for a in range(self.dims) if a in dimensions])
+            if reduced_key not in vals:
+                vals[reduced_key] = cell_val[0]
+            else:
+                vals[reduced_key] += cell_val[0]
+
+        final_centroids = [np.zeros(len([a for a in dimensions])) for a in vals]
+        final_coords = [k for k in vals.keys()]
+        final_vals = [v[1] for v in vals.items()]
+        
+        i = 0
+        for v_key, v_val in vals.items():
+            for d in range(len([a for a in dimensions])):
+                final_centroids[i][d] = self.cell_base[dimensions[d]] + (self.cell_widths[dimensions[d]]*(v_key[d]))
+            i += 1
+
+        return final_coords, final_centroids, final_vals
+
+
     def updateDeterministic(self):
         # Set the next buffer mass values to 0
         for a in self.cell_buffers[(self.current_buffer+1)%2].keys():
@@ -164,16 +187,18 @@ class Solver:
     def draw(self):
         if not self.visualiser.beginRendering():
             return
-        max_coords = (1,1,1)
-        min_coords = (1,1,1)
+        max_coords = tuple([1 for a in self.vis_dimensions])
+        min_coords = tuple([1 for a in self.vis_dimensions])
         self.max_mass = 0.0
-        for a in self.cell_buffers[self.current_buffer].keys():
-            max_coords = (max(max_coords[0],a[0]),max(max_coords[1],a[1]),max(max_coords[2],a[2]))
-            min_coords = (min(min_coords[0],a[0]),min(min_coords[1],a[1]),min(min_coords[2],a[2]))
-            self.max_mass = max(self.max_mass, self.cell_buffers[self.current_buffer][a][0])
-        self.coord_extent = (max(10,max_coords[0]-min_coords[0]+1), max(10,max_coords[1]-min_coords[1]+1), max(10,max_coords[2]-min_coords[2]+1))
 
-        for a in self.cell_buffers[self.current_buffer].keys():
-            self.visualiser.drawCell(a, self.cell_buffers[self.current_buffer][a][0] / self.max_mass, origin_location=(0.0,0.0,0.0), max_size=(2.0,2.0,2.0), max_res=self.coord_extent)
+        mcoords, mcentroids, mvals = self.calcMarginal(self.vis_dimensions)
+        for a in range(len(mvals)):
+            max_coords = tuple([max(max_coords[self.vis_dimensions[i]],mcoords[a][i]) for i in range(len(self.vis_dimensions))])
+            min_coords = tuple([min(min_coords[self.vis_dimensions[i]],mcoords[a][i]) for i in range(len(self.vis_dimensions))])
+            self.max_mass = max(self.max_mass, mvals[a])
+        self.coord_extent = tuple([max(10,max_coords[a]-min_coords[a]+1) for a in range(len(self.vis_dimensions))])
+        
+        for a in range(len(mvals)):
+            self.visualiser.drawCell(mcoords[a], mvals[a] / self.max_mass, origin_location=tuple([0.0 for d in range(len(self.vis_dimensions))]), max_size=tuple([2.0 for d in range(len(self.vis_dimensions))]), max_res=self.coord_extent)
 
         self.visualiser.endRendering()

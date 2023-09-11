@@ -15,7 +15,7 @@ use_monte_carlo = True
 use_cpu_solver = True
 use_gpu_solver = False
 plot_output = False
-use_visualiser = False
+use_visualiser = True
 
 def cond(y):
     E_l = -70.6
@@ -170,7 +170,7 @@ if use_cpu_solver:
     if use_visualiser:
         cpu_vis = Visualiser()
         cpu_vis.setupVisuliser()
-    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001, cpu_vis)
+    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001, cpu_vis, vis_dimensions=tuple([0]))
     solver.addNoiseKernel(pymiind_wI, 1)
     solver.addNoiseKernel(pymiind_uI, 2)
     print("CPU Setup time:", time.perf_counter() - perf_time)
@@ -232,15 +232,11 @@ for iteration in range(101):
         
         # Plot CPU Solver marginals
         if use_cpu_solver:
-            mpos, marginals = solver.calcMarginals()
-
-            marginals[0] = [a / (cell_widths[0]) for a in marginals[0]]
-            marginals[1] = [a / (cell_widths[1]) for a in marginals[1]]
-            marginals[2] = [a / (cell_widths[2]) for a in marginals[2]]
-
-            ax[0,0].scatter(mpos[0], marginals[0])
-            ax[0,1].scatter(mpos[1], marginals[1])
-            ax[1,0].scatter(mpos[2], marginals[2])
+            for d in range(3):
+                vcoords, vpos, v_marginal = solver.calcMarginal([d])
+                v_marginal = [a / (cell_widths[d]) for a in v_marginal]
+                ax[int(d==2),int(d==1)].scatter(vpos, v_marginal)
+            
 
         # Plot GPU Solver marginals
         if use_gpu_solver:

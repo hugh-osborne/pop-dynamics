@@ -57,8 +57,8 @@ class Visualiser:
         for surface in self.surfaces:
           x = 0
           for vertex in surface:
-            x += 1
             glColor3fv(colours[x])
+            x += 1
             vert = [0 for v in self.verts[vertex]]
             vert[0] = (self.verts[vertex][0] * scale[0]) + pos[0]
             vert[1] = (self.verts[vertex][1] * scale[1]) + pos[1]
@@ -74,8 +74,8 @@ class Visualiser:
         for surface in self.surfaces:
           x = 0
           for vertex in surface:
-            x += 1
             glColor4fv(colours[x])
+            x += 1
             vert = [0 for v in self.verts[vertex]]
             vert[0] = (self.verts[vertex][0] * scale[0]) + pos[0]
             vert[1] = (self.verts[vertex][1] * scale[1]) + pos[1]
@@ -101,6 +101,26 @@ class Visualiser:
         pos = (origin_location[0] - (max_size[0]/2.0) + ((cell_coords[0]+0.5)*widths[0]), origin_location[1] - (max_size[1]/2.0) + ((cell_coords[1]+0.5)*widths[1]))
         
         self.square(pos, scale=widths, col=(cell_mass,0,0))
+
+    def drawCell1D(self, cell_coords, cell_mass, origin_location=(0.0), max_size=(2.0), max_res=(100)):
+        if self.closed:
+            return
+
+        widths = (max_size[0]/max_res[0], 0.5)
+        pos = (origin_location[0] - (max_size[0]/2.0) + ((cell_coords[0]+0.5)*widths[0]), 0.0)
+        
+        self.square(pos, scale=widths, col=(cell_mass,0,0))
+
+    def drawCell(self, cell_coords, cell_mass, origin_location=(0.0), max_size=(2.0), max_res=(10)):
+        if len(max_res) == 1:
+            self.drawCell1D(cell_coords, cell_mass, origin_location, max_size, max_res)
+        elif len(max_res) == 2:
+            self.drawCell2D(cell_coords, cell_mass, origin_location, max_size, max_res)
+        elif len(max_res) == 3:
+            self.drawCell3D(cell_coords, cell_mass, origin_location, max_size, max_res)
+        else:
+            print("Trying to render too many dimensions.")
+
 
     def setupVisuliser(self, display_size=(800,800)):
         pygame.init()
