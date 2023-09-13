@@ -25,8 +25,7 @@ class Visualiser:
             (-1, 1)
             )
 
-        self.surfaces = (
-            (0,1,2,3)
+        self.surfaces = tuple([(0,1,2,3)]
             )
 
         if self.num_dimensions == 3:
@@ -62,8 +61,11 @@ class Visualiser:
             vert = [0 for v in self.verts[vertex]]
             vert[0] = (self.verts[vertex][0] * scale[0]) + pos[0]
             vert[1] = (self.verts[vertex][1] * scale[1]) + pos[1]
-            vert[2] = 1.0
-            glVertex3fv(vert)
+            if self.num_dimensions == 3:
+                vert[2] = 0.0
+                glVertex3fv(vert)
+            else:
+                glVertex2fv(vert)
 
         glEnd()
 
@@ -131,9 +133,9 @@ class Visualiser:
         if self.num_dimensions == 3:
             gluPerspective(45, (display[0]/display[1]), 0.1, 50.0)
         else:
-            glOrtho(-2.0, 2.0, -2.0, 2.0, 0.1, 50.0)
+            glOrtho(-1.0, 1.0, -1.0, 1.0, 0.1, 50.0)
         glEnable(GL_BLEND)
-        glTranslatef(0.0,0.0,-5)
+        glTranslatef(0.0,0.0,-2)
         glRotatef(0, 0, 0, 0)
 
     def beginRendering(self):

@@ -21,6 +21,7 @@ class Solver:
         self.coord_extent = np.ones(self.dims) # The number of cells in each dimension direction
         self.max_mass = 1.0
         self.vis_dimensions = vis_dimensions
+        self.vis_coord_offset = (0,0,0)
 
         first_cell = True
         cell_base_coords = np.zeros(self.dims)
@@ -28,9 +29,11 @@ class Solver:
             if val > 0.0:
                 if first_cell:
                     cell_base_coords = idx
+                    self.vis_coord_offset = cell_base_coords
                     self.cell_base = _base + (np.multiply(idx,_cell_widths))
                     first_cell = False
-                self.cell_buffers[self.current_buffer][tuple((np.asarray(idx)-cell_base_coords).tolist())] = [val, []]
+                self.cell_buffers[0][tuple((np.asarray(idx)-cell_base_coords).tolist())] = [val, []]
+                self.cell_buffers[1][tuple((np.asarray(idx)-cell_base_coords).tolist())] = [val, []]
 
         # init first cell buffer
 
@@ -42,7 +45,8 @@ class Solver:
 
             stepped_centroid = self.func(centroid)
 
-            self.cell_buffers[self.current_buffer][coord][1] = self.calcTransitions(centroid, stepped_centroid, coord)
+            self.cell_buffers[0][coord][1] = self.calcTransitions(centroid, stepped_centroid, coord)
+            self.cell_buffers[1][coord][1] = self.calcTransitions(centroid, stepped_centroid, coord)
 
     def addNoiseKernel(self, kernel, dimension):
         kernel_transitions = {}
@@ -136,7 +140,6 @@ class Solver:
 
         return final_coords, final_centroids, final_vals
 
-
     def updateDeterministic(self):
         # Set the next buffer mass values to 0
         for a in self.cell_buffers[(self.current_buffer+1)%2].keys():
@@ -193,6 +196,7 @@ class Solver:
 
         mcoords, mcentroids, mvals = self.calcMarginal(self.vis_dimensions)
         for a in range(len(mvals)):
+            mcoords[a] = [mcoords[a][i] + self.vis_coord_offset[self.vis_dimensions[i]] for i in range(len(self.vis_dimensions))]
             max_coords = tuple([max(max_coords[i],mcoords[a][i]) for i in range(len(self.vis_dimensions))])
             min_coords = tuple([min(min_coords[i],mcoords[a][i]) for i in range(len(self.vis_dimensions))])
             self.max_mass = max(self.max_mass, mvals[a])

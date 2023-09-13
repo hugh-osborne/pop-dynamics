@@ -11,9 +11,9 @@ from popdynamics.popsolver import Solver
 from popdynamics.fastpopsolver import FastSolver
 from popdynamics.visualiser import Visualiser
 
-use_monte_carlo = True
-use_cpu_solver = False
-use_gpu_solver = True
+use_monte_carlo = False
+use_cpu_solver = True
+use_gpu_solver = False
 plot_output = False
 use_visualiser = True
 
@@ -51,9 +51,9 @@ I_res = 101
 
 v_max = -40.0
 v_min = -80.0
-w_max = 50.0
+w_max = 25.0
 w_min = -5.0
-u_max = 50.0
+u_max = 25.0
 u_min = -5.0
 
 # Set up the starting distribution
@@ -153,6 +153,10 @@ for i in range(I_res):
 if use_monte_carlo:
     mc_neurons = np.array([[norm.rvs(-70.6, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0],norm.rvs(0.0, 0.1, 1)[0]] for a in range(5000)])
 
+mc_vis = None
+if use_visualiser:
+    mc_vis = Visualiser(2)
+    mc_vis.setupVisuliser()
 
 # CPU solver
 dims = 3
@@ -168,9 +172,9 @@ if use_cpu_solver:
     perf_time = time.perf_counter()
     cpu_vis = None
     if use_visualiser:
-        cpu_vis = Visualiser()
+        cpu_vis = Visualiser(2)
         cpu_vis.setupVisuliser()
-    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.00000001, cpu_vis, vis_dimensions=tuple([0,1]))
+    solver = Solver(cond, initial_dist, np.array([v_min,w_min,u_min]), cell_widths, 0.0000001, cpu_vis, vis_dimensions=tuple([0,1]))
     solver.addNoiseKernel(pymiind_wI, 1)
     solver.addNoiseKernel(pymiind_uI, 2)
     print("CPU Setup time:", time.perf_counter() - perf_time)
@@ -182,9 +186,9 @@ if use_gpu_solver:
     perf_time = time.perf_counter()
     gpu_vis = None
     if use_visualiser:
-        gpu_vis = Visualiser()
+        gpu_vis = Visualiser(2)
         gpu_vis.setupVisuliser()
-    gpu_solver = FastSolver(cond, initial_dist, [v_min, w_min, u_min], [v_max-v_min, w_max-w_min, u_max-u_min], [v_res, w_res, u_res],gpu_vis, vis_dimensions=tuple([0,1,2]))
+    gpu_solver = FastSolver(cond, initial_dist, [v_min, w_min, u_min], [v_max-v_min, w_max-w_min, u_max-u_min], [v_res, w_res, u_res],gpu_vis, vis_dimensions=tuple([0,1]))
     gpu_solver.addNoiseKernel(pymiind_wI, 1)
     gpu_solver.addNoiseKernel(pymiind_uI, 2)
     print("GPU Setup time:", time.perf_counter() - perf_time)
@@ -211,7 +215,14 @@ for iteration in range(101):
     if use_monte_carlo:
         fired_count = 0
 
+        if use_visualiser:
+            use_visualiser = mc_vis.beginRendering()
+
         for nn in range(len(mc_neurons)):
+            if use_visualiser:
+                #mc_vis.cube(pos=(-1.0 + (2.0*(mc_neurons[nn][0] + 80.0) / 50.0), -1.0 + (2.0*(mc_neurons[nn][1] + 5.0)/ 25.0), -1.0 + (2.0*(mc_neurons[nn][2] + 5.0)/ 25.0)), scale=(0.01,0.01,0.01), col=(1,0,0,1))
+                mc_vis.square(pos=(-1.0 + (2.0*(mc_neurons[nn][0] + 80.0) / 40.0), -1.0 + (2.0*(mc_neurons[nn][1] + 5.0)/ 25.0)), scale=(0.01,0.01), col=(1,0,0))
+
             mc_neurons[nn] = cond(mc_neurons[nn])
         
             if (mc_neurons[nn][0] > -50.0):
@@ -219,7 +230,10 @@ for iteration in range(101):
                 fired_count+=1
                 
             mc_neurons[nn][1] += epsp*poisson.rvs(w_rate*0.1) # override w
-            mc_neurons[nn][2] += ipsp*poisson.rvs(u_rate*0.1) # override u  
+            mc_neurons[nn][2] += ipsp*poisson.rvs(u_rate*0.1) # override u
+            
+        if use_visualiser:
+            mc_vis.endRendering()
             
     if plot_output and (iteration % 1 == 0) :
         # Plot Monte Carlo
@@ -237,7 +251,6 @@ for iteration in range(101):
                 v_marginal = [a / (cell_widths[d]) for a in v_marginal]
                 ax[int(d==2),int(d==1)].scatter(vpos, v_marginal)
             
-
         # Plot GPU Solver marginals
         if use_gpu_solver:
             for d in range(3):

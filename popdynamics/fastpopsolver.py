@@ -109,6 +109,8 @@ class FastSolver:
 
         self.visualiser = _vis
         self.vis_dimensions = vis_dimensions
+        self.vis_coords = None
+        self.vis_centroids = None
         
         self.csr = self.generateConditionalTransitionCSR(self.grids[0], _func, self.grids[1])
 
@@ -143,21 +145,25 @@ class FastSolver:
 
         return final_vs, final_vals
 
-    def calcMarginal(self, dimensions, include_epsilon=False):
-        print("slow?")
+    def calcMarginal(self, dimensions):
         reduced_grid = NdGrid([self.grids[self.current_grid].base[d] for d in dimensions], [self.grids[self.current_grid].size[d] for d in dimensions], [self.grids[self.current_grid].res[d] for d in dimensions])
-        print("1")
         other_dims = tuple([i for i in range(self.grids[self.current_grid].numDimensions()) if i not in dimensions])
         final_vals = np.ravel(np.sum(self.grids[self.current_grid].readData(), other_dims))
-        print("2")
-        final_coords = [reduced_grid.getCellCoords(c) for c in range(reduced_grid.total_cells) if final_vals[c] > 0.000001 or include_epsilon]
-        print("3")
-        print("4")
-        final_centroids = [reduced_grid.getCellCentroid(c) for c in range(reduced_grid.total_cells) if final_vals[c] > 0.000001 or include_epsilon]
-        print("5")
-        final_vals = [i for i in final_vals if i > 0.000001 or include_epsilon]
-        print("6")
+        final_coords = [reduced_grid.getCellCoords(c) for c in range(reduced_grid.total_cells)]
+        final_centroids = [reduced_grid.getCellCentroid(c) for c in range(reduced_grid.total_cells)]
         return final_coords, final_centroids, final_vals
+    
+    # Calculating the coords and centroids in calcMarginal is slow and, for the visualiser, these values stay constant (only the mass values change)
+    def calcMarginalForVis(self):
+        if self.vis_coords is None and self.vis_centroids is None:
+            reduced_grid = NdGrid([self.grids[self.current_grid].base[d] for d in self.vis_dimensions], [self.grids[self.current_grid].size[d] for d in self.vis_dimensions], [self.grids[self.current_grid].res[d] for d in self.vis_dimensions])
+            self.vis_coords = [reduced_grid.getCellCoords(c) for c in range(reduced_grid.total_cells)]
+            self.vis_centroids = [reduced_grid.getCellCentroid(c) for c in range(reduced_grid.total_cells)]
+            
+        other_dims = tuple([i for i in range(self.grids[self.current_grid].numDimensions()) if i not in self.vis_dimensions])
+        final_vals = np.ravel(np.sum(self.grids[self.current_grid].readData(), other_dims))
+        
+        return self.vis_coords, self.vis_centroids, final_vals
 
     def updateDeterministic(self):
         self.grids[(self.current_grid+1)%2].updateData(self.csr.dot(self.grids[self.current_grid].data))
@@ -191,7 +197,7 @@ class FastSolver:
         if not self.visualiser.beginRendering():
             return
         
-        mcoords, mcentroids, mvals = self.calcMarginal(self.vis_dimensions)
+        mcoords, mcentroids, mvals = self.calcMarginalForVis()
         
         self.max_mass = 0.0
         for m in mvals:
