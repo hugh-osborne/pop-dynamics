@@ -17,7 +17,7 @@ use_gpu_solver = False
 plot_output = False
 use_visualiser = True
 
-def cond(y):
+def cond_individual(y):
     E_l = -70.6
     E_e = 0.0
     E_i = -75
@@ -44,10 +44,13 @@ def cond(y):
 
     return [nv, w + 0.1*w_prime, u + 0.1*u_prime]
 
-v_res = 100
-w_res = 100
-u_res = 100
-I_res = 101
+def cond(y):
+    return [cond_individual(p) for p in y]
+
+v_res = 200
+w_res = 200
+u_res = 200
+I_res = 201
 
 v_max = -40.0
 v_min = -80.0
@@ -201,7 +204,7 @@ for iteration in range(101):
         solver.updateDeterministic()
         solver.applyNoiseKernels()
         if use_visualiser:
-            solver.draw((100,100))
+            solver.draw((200,200))
 
     # GPU Solver
     if use_gpu_solver:
@@ -223,7 +226,7 @@ for iteration in range(101):
                 #mc_vis.cube(pos=(-1.0 + (2.0*(mc_neurons[nn][0] + 80.0) / 50.0), -1.0 + (2.0*(mc_neurons[nn][1] + 5.0)/ 25.0), -1.0 + (2.0*(mc_neurons[nn][2] + 5.0)/ 25.0)), scale=(0.01,0.01,0.01), col=(1,0,0,1))
                 mc_vis.square(pos=(-1.0 + (2.0*(mc_neurons[nn][0] + 80.0) / 40.0), -1.0 + (2.0*(mc_neurons[nn][1] + 5.0)/ 25.0)), scale=(0.01,0.01), col=(1,0,0))
 
-            mc_neurons[nn] = cond(mc_neurons[nn])
+            mc_neurons[nn] = cond_individual(mc_neurons[nn])
         
             if (mc_neurons[nn][0] > -50.0):
                 mc_neurons[nn][0] = -70.6

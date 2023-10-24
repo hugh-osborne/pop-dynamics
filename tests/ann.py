@@ -12,10 +12,10 @@ from popdynamics.fastpopsolver import FastSolver
 
 use_monte_carlo = True
 use_cpu_solver = True
-use_gpu_solver = True
+use_gpu_solver = False
 plot_output = True
 
-def cond(y):
+def cond_individual(y):
     E_l = -70.6
     E_e = 0.0
     E_i = -75
@@ -41,6 +41,9 @@ def cond(y):
         nv = reset
 
     return [nv, w + 0.1*w_prime, u + 0.1*u_prime]
+
+def cond(y):
+    return [cond_individual(p) for p in y]
 
 v_res = 100
 w_res = 100
@@ -170,7 +173,7 @@ for cv in range(v_res_train):
     for cw in range(w_res_train):
         for cu in range(u_res_train):
             start_point = [v_min+(cv*((v_max-v_min)/v_res_train)),w_min+(cw*((w_max-w_min)/w_res_train)),u_min+(cu*((u_max-u_min)/u_res_train))]
-            start_point += cond(start_point)
+            start_point += cond_individual(start_point)
             training_data = training_data + [np.array(start_point)]
 
 from tensorflow.keras.models import Sequential
@@ -188,7 +191,7 @@ model.fit(training_data[:,0:3], training_data[:,3:6], epochs=100, batch_size=10,
 
 print([-70.6, 5.0, 0.0], "->", model.predict(np.array([[-70.6, 5.0, 0.0]]),verbose=0)[0])
 def learned_cond(y):
-    return model.predict(np.array([y]),verbose=0)[0]
+    return model.predict(np.array(y),verbose=0)
  
 if use_cpu_solver:
     perf_time = time.perf_counter()
@@ -226,7 +229,7 @@ for iteration in range(101):
         fired_count = 0
 
         for nn in range(len(mc_neurons)):
-            mc_neurons[nn] = cond(mc_neurons[nn])
+            mc_neurons[nn] = cond_individual(mc_neurons[nn])
         
             if (mc_neurons[nn][0] > -50.0):
                 mc_neurons[nn][0] = -70.6

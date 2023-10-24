@@ -116,9 +116,11 @@ class FastSolver:
 
     def generateConditionalTransitionCSR(self, grid_in, func, grid_out):
         lil_mat = lil_matrix((grid_in.total_cells,grid_out.total_cells))
+        start_points = [grid_in.getCellCentroid(r) for r in range(grid_in.total_cells)]
+        trans_points = func(start_points)
+        
         for r in range(grid_in.total_cells):
-            start_point = grid_in.getCellCentroid(r)
-            ts = grid_in.calcTransitions(start_point, func(start_point), grid_in.getCellCoords(r))
+            ts = grid_in.calcTransitions(start_points[r], trans_points[r], grid_in.getCellCoords(r))
             for t in ts:
                 out_cell = grid_out.getCellNum(t[1])
                 if out_cell < 0:

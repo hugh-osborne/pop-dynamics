@@ -1,3 +1,4 @@
+from xml.etree import cElementTree
 import numpy as np
 from .visualiser import Visualiser
 
@@ -36,17 +37,22 @@ class Solver:
                 self.cell_buffers[1][tuple((np.asarray(idx)-cell_base_coords).tolist())] = [val, []]
 
         # init first cell buffer
-
+        centroids = []
         for coord in self.cell_buffers[self.current_buffer]:
             centroid = [0 for a in range(self.dims)]
 
             for d in range(self.dims):
                 centroid[d] = self.cell_base[d] + ((coord[d]+0.5)*self.cell_widths[d])
+                
+            centroids = centroids + [centroid]
+            
+        shifted_centroids = self.func(centroids)
 
-            stepped_centroid = self.func(centroid)
-
-            self.cell_buffers[0][coord][1] = self.calcTransitions(centroid, stepped_centroid, coord)
-            self.cell_buffers[1][coord][1] = self.calcTransitions(centroid, stepped_centroid, coord)
+        centroid_count = 0
+        for coord in self.cell_buffers[self.current_buffer]:
+            self.cell_buffers[0][coord][1] = self.calcTransitions(centroids[centroid_count], shifted_centroids[centroid_count], coord)
+            self.cell_buffers[1][coord][1] = self.calcTransitions(centroids[centroid_count], shifted_centroids[centroid_count], coord)
+            centroid_count += 1
 
     def addNoiseKernel(self, kernel, dimension):
         kernel_transitions = {}
@@ -74,23 +80,37 @@ class Solver:
     
         return self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_lo], mass*prop_lo) + self.calcTransitions(centroid, stepped_centroid, coord, d+1, target_coord + [cell_hi], mass*prop_hi)
 
-    def updateCell(self, relative, new_cell_dict, transition, coord, mass, func):
+    def calculateCellCentroidForUpdate(self, relative, new_cell_dict, transition, coord):
         t = [a for a in transition[1]]
         if relative:
             for d in range(len(coord)):
                 t[d] = coord[d] + t[d]
 
         if tuple(t) not in new_cell_dict.keys():
-            new_cell_dict[tuple(t)] = [0.0,[]]
             centroid = [0 for a in range(len(coord))]
 
             for d in range(len(coord)):
                 centroid[d] = self.cell_base[d] + ((t[d]+0.5)*self.cell_widths[d])
+                
+            return centroid
+        
+        return None
 
-            stepped_centroid = func(centroid)
-            new_cell_dict[tuple(t)][1] = self.calcTransitions(centroid, stepped_centroid, t)
+    def updateCell(self, relative, new_cell_dict, transition, centroid, shifted_centroid, coord, mass):
+        t = [a for a in transition[1]]
+        if relative:
+            for d in range(len(coord)):
+                t[d] = coord[d] + t[d]
+
+        updated = False
+        if tuple(t) not in new_cell_dict.keys():
+            new_cell_dict[tuple(t)] = [0.0,[]]
+            new_cell_dict[tuple(t)][1] = self.calcTransitions(centroid, shifted_centroid, t)
+            updated = True
     
         new_cell_dict[tuple(t)][0] += mass*transition[0]
+        
+        return updated
 
     def calcCellCentroid(self, coords):
         centroid = [0 for a in range(self.dims)]
@@ -144,12 +164,24 @@ class Solver:
         # Set the next buffer mass values to 0
         for a in self.cell_buffers[(self.current_buffer+1)%2].keys():
             self.cell_buffers[(self.current_buffer+1)%2][a][0] = 0.0
+            
+        # Batch calculate all centroids and shifted centroids (func(centroid))
+        centroids = []
+        for coord in self.cell_buffers[self.current_buffer]:
+            for ts in self.cell_buffers[self.current_buffer][coord][1]:
+                c = self.calculateCellCentroidForUpdate(False, self.cell_buffers[(self.current_buffer+1)%2], ts, coord)
+                if c is not None:
+                    centroids = centroids + [c]
+                
+        shifted_centroids = self.func(centroids)
     
         # Fill the next buffer with the updated mass
+        centroid_id = 0
         for coord in self.cell_buffers[self.current_buffer]:
             self.cell_buffers[self.current_buffer][coord][0] /= self.remove_sum
             for ts in self.cell_buffers[self.current_buffer][coord][1]:
-                self.updateCell(False, self.cell_buffers[(self.current_buffer+1)%2], ts, coord, self.cell_buffers[self.current_buffer][coord][0], self.func)
+                if self.updateCell(False, self.cell_buffers[(self.current_buffer+1)%2], ts, centroids[centroid_id], shifted_centroids[centroid_id], coord, self.cell_buffers[self.current_buffer][coord][0]):
+                    centroid_id += 1
 
         # Remove any cells with a small amount of mass and keep a total to spread back to the remaining population
         remove = []
