@@ -8,6 +8,8 @@ class Solver:
         self.dims = _base.shape[0]
         # associated cell widths along each dimension
         self.cell_widths = _cell_widths
+        # origin point of full grid
+        self.base = _base
 
         # A Cell buffer is a dictinoary that represents all cells containing (non-zero) probability mass
         # Each cell has a coordinate in the discretised state space which is the dictionary key.
@@ -76,7 +78,53 @@ class Solver:
                 
             centroids = centroids + [centroid]
             
-        shifted_centroids = self.func(centroids)
+        if len(centroids) > 0:
+            shifted_centroids = self.func(centroids)
+
+        centroid_count = 0
+        for coord in self.cell_buffers[self.current_buffer]:
+            self.cell_buffers[0][coord][1] = self.calcTransitions(centroids[centroid_count], shifted_centroids[centroid_count], coord)
+            self.cell_buffers[1][coord][1] = self.calcTransitions(centroids[centroid_count], shifted_centroids[centroid_count], coord)
+            centroid_count += 1
+            
+    def findCellCoordsOfPoint(self, point):
+        coords = np.zeros(self.dims)
+        for c in range(self.dims):
+            coords[c] = int((point[c] - self.base[c]) / self.cell_widths[c])
+          
+        return coords
+    
+    def generateInitialDistribtionFromSample(self, points):
+        # assert dimension of points matches that of the grid
+        
+        mass_per_point = 1.0 / points.shape[-1]
+        
+        # First cell is the location of the first point.
+        cell_base_coords = self.findCellCoordsOfPoint(points[0])
+        self.vis_coord_offset = cell_base_coords
+        self.cell_base = points[0]
+        
+        for p in points:
+            cs = tuple((np.asarray(self.findCellCoordsOfPoint(p))-cell_base_coords).tolist())
+            if cs not in self.cell_buffers[0].keys():
+                self.cell_buffers[0][cs] = [mass_per_point, []]
+                self.cell_buffers[1][cs] = [mass_per_point, []]
+            else:
+                self.cell_buffers[0][cs][0] += mass_per_point
+                self.cell_buffers[1][cs][0] += mass_per_point
+        
+        # Calculate the transitions for each cell in the buffer (non-zero cells from the initial distribution)
+        centroids = []
+        for coord in self.cell_buffers[self.current_buffer]:
+            centroid = [0 for a in range(self.dims)]
+
+            for d in range(self.dims):
+                centroid[d] = self.cell_base[d] + ((coord[d]+0.5)*self.cell_widths[d])
+                
+            centroids = centroids + [centroid]
+            
+        if len(centroids) > 0:
+            shifted_centroids = self.func(centroids)
 
         centroid_count = 0
         for coord in self.cell_buffers[self.current_buffer]:
@@ -204,7 +252,8 @@ class Solver:
                     centroids = centroids + [centroid]
                 
         # Batch apply the function to the new centroids
-        shifted_centroids = self.func(centroids)
+        if len(centroids) > 0:
+            shifted_centroids = self.func(centroids)
         
         # Build the transitions for each new cell
         for c in range(len(new_coords)):
@@ -248,7 +297,8 @@ class Solver:
                         centroids = centroids + [centroid]
                 
             # Batch apply the function to the new centroids
-            shifted_centroids = self.func(centroids)
+            if len(centroids) > 0:
+                shifted_centroids = self.func(centroids)
         
             # Build the transitions for each new cell
             for c in range(len(new_coords)):
