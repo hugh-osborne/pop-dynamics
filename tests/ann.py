@@ -10,7 +10,7 @@ import time
 from popdynamics.popsolver import Solver
 from popdynamics.fastpopsolver import FastSolver
 
-use_monte_carlo = True
+use_monte_carlo = False
 use_cpu_solver = True
 use_gpu_solver = False
 plot_output = True
@@ -166,9 +166,9 @@ for cv in range(v_res):
             initial_dist[cv,cw,cu] = vpdf[cv]*wpdf[cw]*updf[cu]
 
 training_data = []
-v_res_train = 50
-w_res_train = 50
-u_res_train = 50
+v_res_train = 10
+w_res_train = 10
+u_res_train = 10
 for cv in range(v_res_train):
     for cw in range(w_res_train):
         for cu in range(u_res_train):
@@ -187,7 +187,7 @@ model.compile(loss='mse', optimizer='rmsprop', metrics=['accuracy'])
 
 training_data = np.array(training_data)
 
-model.fit(training_data[:,0:3], training_data[:,3:6], epochs=100, batch_size=10, verbose=0)
+model.fit(training_data[:,0:3], training_data[:,3:6], epochs=100, batch_size=10, verbose=1)
 
 print([-70.6, 5.0, 0.0], "->", model.predict(np.array([[-70.6, 5.0, 0.0]]),verbose=0)[0])
 def learned_cond(y):

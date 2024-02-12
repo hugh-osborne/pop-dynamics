@@ -12,8 +12,8 @@ from popdynamics.fastpopsolver import FastSolver
 from popdynamics.visualiser import Visualiser
 
 use_monte_carlo = False
-use_cpu_solver = True
-use_gpu_solver = False
+use_cpu_solver = False
+use_gpu_solver = True
 plot_output = False
 use_visualiser = True
 
@@ -47,10 +47,10 @@ def cond_individual(y):
 def cond(y):
     return [cond_individual(p) for p in y]
 
-v_res = 200
-w_res = 200
-u_res = 200
-I_res = 201
+v_res = 100
+w_res = 100
+u_res = 100
+I_res = 101
 
 v_max = -40.0
 v_min = -80.0

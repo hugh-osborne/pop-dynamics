@@ -135,6 +135,7 @@ class FastSolver:
     # Later we should allow the definition of ND kernels.
     def addNoiseKernel(self, kernel_data, dimension):
         self.noise_kernels = self.noise_kernels + [(dimension, cp.asarray(kernel_data, dtype=cp.float32))]
+        return len(self.noise_kernels)-1
 
     # Do CPU marginal calculation for now. Slow because we need to move the full distribution off card
     def calcMarginals(self):
